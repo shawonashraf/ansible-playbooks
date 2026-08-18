@@ -80,6 +80,15 @@
                 scope: global
                 value: store
 
+        - name: Ensure the parent directory of the backup clone exists
+          # git clone would create it, but then its owner and mode depend on
+          # whatever umask the run inherits. ~/Tools is not part of a stock
+          # Fedora home directory.
+          file:
+            path: "{{ claude_sync.dest | dirname }}"
+            state: directory
+            mode: "0755"
+
         - name: Install claude-code-sync as a uv tool
           # Deliberately not uvx: the session-end hook records the absolute
           # path of whichever claude-sync installed it, and an ephemeral uvx
