@@ -98,6 +98,35 @@ private_repos:
     private: true   # clone using github_token
 ```
 
+## Claude Code settings sync
+
+`playbook-agents.yml` installs Claude Code, then restores its configuration
+with [claude-code-sync](https://github.com/shawonashraf/claude-code-sync):
+skills, hooks, agents, keybindings, the global `CLAUDE.md`, a redacted
+`settings.json` and the plugin manifest. History, sessions and projects are
+never included.
+
+```yaml
+claude_sync:
+  backup_repo: "https://github.com/youruser/claude-code-backup.git"
+  dest: "{{ target_user_home }}/Tools/claude-code-backup"
+  install_hook: true
+```
+
+Set `backup_repo: ""` to skip. The restore runs once, gated on the clone not
+existing, because it overwrites `~/.claude` from the backup and re-running it
+would discard local changes made since. With `install_hook`, a `SessionEnd`
+hook is added so every Claude Code session backs itself up on exit.
+
+The tool is installed with `uv tool install`, not `uvx`. The hook records the
+absolute path of the `claude-sync` that installed it, and an ephemeral `uvx`
+environment lives in the uv cache, so `uv cache clean` would leave the hook
+pointing at a binary that no longer exists.
+
+After a restore, check the play output: it lists plugins that failed to
+reinstall and any environment variables that were redacted out of
+`settings.json` and need re-supplying by hand.
+
 ## Shell configuration
 
 `playbook-shell.yml` restores zsh from a separate configs repository. It runs
@@ -117,6 +146,11 @@ configs_repo:
 Set `url: ""` to skip the playbook entirely. A private repository is cloned
 using `github_token` from the vault; the token is stripped from the checkout's
 remote URL afterwards so it is not left readable in `.git/config`.
+
+> [!NOTE]
+> The Claude Code sync above authenticates differently, through git's
+> credential store, because it also has to *push*. Both read the same
+> `github_token`.
 
 The repository is expected to provide a `setup.sh` and `shell/zshrc-<profile>`.
 `setup.sh` is run once, when `~/.oh-my-zsh` is missing, to install oh-my-zsh,

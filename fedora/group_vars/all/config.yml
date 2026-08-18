@@ -47,6 +47,17 @@ shell_secrets:
   HF_TOKEN: "{{ huggingface_token }}"
   PYPI_TOKEN: "{{ pypi_token }}"
 
+# --- Claude Code settings sync ------------------------------------------------
+# https://github.com/shawonashraf/claude-code-sync backs up skills, hooks,
+# agents, keybindings and a redacted settings.json to a git repository.
+# Point backup_repo at your own; set it to "" to skip. A private repository is
+# authenticated with github_token through the git credential store.
+claude_sync:
+  backup_repo: "https://github.com/shawonashraf/claude-code-backup.git"
+  dest: "{{ target_user_home }}/Tools/claude-code-backup"
+  # Installs the SessionEnd hook so every Claude Code session backs up on exit.
+  install_hook: true
+
 # shell-sync commits and pushes ~/.zshrc automatically. Left off because that
 # would push any credential pasted into a live shell without review.
 configs_shell_sync: false

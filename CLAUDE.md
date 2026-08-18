@@ -94,6 +94,28 @@ splitting on newlines. A `'\n'` written inside a YAML folded scalar (`>-`) does
 not reach Jinja as a newline, so `split('\n')` silently returns a single element
 and every `^`-anchored filter then matches nothing.
 
+## Claude Code sync (in playbook-agents)
+
+Install `claude-code-sync` with `uv tool install`, **never `uvx`**. Its
+session-end hook stores the absolute path of whichever `claude-sync` ran the
+install; an ephemeral uvx environment lives in the uv cache, so `uv cache clean`
+would silently break the hook.
+
+`claude-sync` shells out to plain `git clone` and `git push` with no credential
+handling of its own, which is why the playbook writes `~/.git-credentials` at
+mode 0600 and sets `credential.helper store` rather than embedding the token in
+a remote URL. The backup repo is pushed to, so a URL-embedded token could not be
+stripped afterwards the way playbook-shell strips its own.
+
+`restore` is gated on the clone directory being absent. It overwrites `~/.claude`
+from the backup, so running it every pass would discard local changes. Note that
+`creates:` makes a task report empty stdout rather than marking it `skipped`, so
+guard follow-up tasks on the output being non-empty, not on `is not skipped`.
+
+Never run `claude-sync restore` while testing on a development machine: it shells
+out to `claude plugin install` against the real `~/.claude`, regardless of
+`CLAUDE_SYNC_HOME`.
+
 ## Verifying changes
 
 The playbooks target Fedora and cannot be fully run on macOS. What does work

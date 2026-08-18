@@ -38,3 +38,86 @@
       loop:
         - .bashrc
         - .zshrc
+
+# Restores the Claude Code configuration (skills, hooks, agents, keybindings,
+# a redacted settings.json and the plugin manifest) from a backup repository,
+# then arms the session-end hook so later sessions back themselves up.
+- hosts: all
+  become: true
+  become_user: "{{ target_user }}"
+
+  vars:
+    claude_sync_bin: "{{ target_user_home }}/.local/bin/claude-sync"
+
+  environment:
+    # uv, claude-sync and claude all install here, and this play runs before
+    # the shell profile that would otherwise put it on PATH.
+    PATH: "{{ target_user_home }}/.local/bin:/usr/local/bin:/usr/bin:/bin"
+
+  tasks:
+    - name: Set up Claude Code settings sync
+      when: claude_sync.backup_repo | length > 0
+      block:
+
+        - name: Authenticate git against GitHub for private repositories
+          # claude-sync shells out to plain `git clone` and `git push` with no
+          # credential handling of its own, so the token has to reach git some
+          # other way. The credential store keeps it in one 0600 file instead
+          # of embedded in every remote URL.
+          when: github_token | length > 0
+          block:
+
+            - name: Write the git credential store
+              copy:
+                content: "https://oauth2:{{ github_token }}@github.com\n"
+                dest: "{{ target_user_home }}/.git-credentials"
+                mode: "0600"
+              no_log: true
+
+            - name: Enable the git credential store
+              community.general.git_config:
+                name: credential.helper
+                scope: global
+                value: store
+
+        - name: Install claude-code-sync as a uv tool
+          # Deliberately not uvx: the session-end hook records the absolute
+          # path of whichever claude-sync installed it, and an ephemeral uvx
+          # environment lives in the uv cache, so `uv cache clean` would leave
+          # the hook pointing at a binary that no longer exists.
+          command: uv tool install claude-code-sync
+          args:
+            creates: "{{ claude_sync_bin }}"
+
+        - name: Restore the Claude Code configuration from the backup
+          # One-time: restore overwrites ~/.claude from the backup and saves
+          # what it replaced. Re-running it on every pass would undo local
+          # changes made since. `creates` ties it to the clone.
+          command: >-
+            {{ claude_sync_bin }} restore {{ claude_sync.backup_repo }}
+            --to {{ claude_sync.dest }}
+          args:
+            creates: "{{ claude_sync.dest }}"
+          register: claude_sync_restore
+
+        - name: Report the restore result
+          # Lists plugins that failed to reinstall and the env vars redacted
+          # out of settings.json, both of which need attention by hand.
+          # `creates` leaves stdout empty rather than marking the task skipped.
+          debug:
+            msg: "{{ claude_sync_restore.stdout_lines }}"
+          when: claude_sync_restore.stdout_lines | default([]) | length > 0
+
+        - name: Check whether the session-end backup hook is installed
+          command: >-
+            grep -q "claude-sync backup --quiet"
+            {{ target_user_home }}/.claude/settings.json
+          register: claude_sync_hook
+          changed_when: false
+          failed_when: false
+
+        - name: Install the session-end backup hook
+          command: "{{ claude_sync_bin }} hook install"
+          when:
+            - claude_sync.install_hook
+            - claude_sync_hook.rc != 0
