@@ -1,10 +1,15 @@
 ---
 - hosts: all
   become: true
+
   tasks:
-    - name: Install curl
+    - name: Install dependencies for agent CLI installers
       dnf:
-        name: curl
+        name:
+          - curl
+          - tar
+          - unzip
+          - git
         state: present
 
 - hosts: all
@@ -14,32 +19,24 @@
 
   tasks:
     - name: Install Claude Code
-      shell: curl -fsSL https://claude.ai/install.sh | bash
+      shell: |
+        curl -fsSL https://claude.ai/install.sh | bash
       args:
         creates: "/home/{{ target_user }}/.local/bin/claude"
 
-    - name: Install OpenCode
-      shell: curl -fsSL https://opencode.ai/install | bash
+    - name: Install opencode
+      shell: |
+        curl -fsSL https://opencode.ai/install | bash
       args:
-        creates: "/home/{{ target_user }}/.local/bin/opencode"
+        creates: "/home/{{ target_user }}/.opencode/bin/opencode"
 
-    - name: Install Mistral Vibe CLI
-      shell: curl -LsSf https://mistral.ai/vibe/install.sh | bash
-      args:
-        creates: "/home/{{ target_user }}/.local/bin/vibe"
-
-    - name: Add ~/.local/bin to PATH in .bashrc
+    - name: Configure shell PATH for agent CLIs
       blockinfile:
-        path: "/home/{{ target_user }}/.bashrc"
+        path: "/home/{{ target_user }}/{{ item }}"
         block: |
-          export PATH="$HOME/.local/bin:$PATH"
-        marker: "# {mark} ANSIBLE MANAGED BLOCK - agents PATH"
+          export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - agent clis"
         create: true
-
-    - name: Add ~/.local/bin to PATH in .zshrc
-      blockinfile:
-        path: "/home/{{ target_user }}/.zshrc"
-        block: |
-          export PATH="$HOME/.local/bin:$PATH"
-        marker: "# {mark} ANSIBLE MANAGED BLOCK - agents PATH"
-        create: true
+      loop:
+        - .bashrc
+        - .zshrc
