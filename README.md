@@ -10,16 +10,22 @@ The repository pins its own Ansible version, so you do not need Ansible installe
 uv sync
 ```
 
-Then configure and run:
+Then run it:
 
 ```bash
 cd fedora
-../.venv/bin/ansible-playbook --version   # or: source ../.venv/bin/activate
 ./run.sh
 ```
 
-`run.sh` prompts for your sudo password, and for the vault password if you have
-set up secrets.
+`run.sh` and `secrets.sh` use the pinned Ansible from `.venv` automatically, so
+there is no environment to activate. They fall back to whatever `ansible` is on
+your `PATH` if the virtualenv is missing. `run.sh` prompts for your sudo
+password, and for the vault password if you have set up secrets. Extra arguments
+are passed through to `ansible-playbook`:
+
+```bash
+./run.sh --syntax-check
+```
 
 ## Configuration
 
@@ -61,6 +67,7 @@ cd fedora
 ./secrets.sh edit    # open it in $EDITOR
 ./secrets.sh view    # print it decrypted
 ./secrets.sh rekey   # change the vault password
+./secrets.sh check   # verify vault.yml is encrypted, before committing
 ```
 
 To avoid retyping the password, write it to `fedora/.vault_pass` — that file is
@@ -75,8 +82,8 @@ without your credentials.
 > Delete it and run `./secrets.sh init` to create your own.
 
 > [!WARNING]
-> Only ever commit `vault.yml` in encrypted form. Verify with
-> `head -1 fedora/group_vars/all/vault.yml` — it must read `$ANSIBLE_VAULT;1.1;AES256`.
+> Only ever commit `vault.yml` in encrypted form. Run `./secrets.sh check`
+> before committing; it exits non-zero if the file is plaintext.
 
 ### Private repositories
 
@@ -96,3 +103,18 @@ private_repos:
 Comment out any import you do not want in [`fedora/playbook.yml`](fedora/playbook.yml).
 Leave `playbook-preflight.yml` first: the other playbooks depend on the variables
 it resolves.
+
+## Layout
+
+```
+pyproject.toml / uv.lock   pinned Ansible
+CLAUDE.md                  conventions for AI agents working in this repo
+fedora/
+  ansible.cfg              inventory and output settings
+  inventory.ini            localhost, local connection
+  run.sh                   entry point
+  secrets.sh               manage the encrypted vault
+  playbook.yml             import list, preflight first
+  playbooks/               one playbook per concern
+  group_vars/all/          configuration and secrets
+```

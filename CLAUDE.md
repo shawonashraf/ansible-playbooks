@@ -9,9 +9,12 @@ hardcoded to a single user or machine.
 Ansible is pinned in this repository — do not rely on a global install.
 
 ```bash
-uv sync                              # create/refresh .venv
-.venv/bin/ansible-playbook --version
+uv sync   # create/refresh .venv
 ```
+
+`fedora/run.sh` and `fedora/secrets.sh` resolve Ansible from `../.venv/bin`
+first and fall back to `PATH`, so they work without activating anything. Keep
+that resolution in place when editing either script.
 
 Use `uv add` / `uv remove` for dependency changes, never `pip`.
 
@@ -61,10 +64,15 @@ rather than fail.
 
 ## Secrets handling
 
-`group_vars/all/vault.yml` is committed **encrypted**. Before committing any
-change that touches it, confirm the first line is `$ANSIBLE_VAULT;1.1;AES256`.
-Never commit `.vault_pass` (gitignored). Never write a real token into
+`group_vars/all/vault.yml` is committed **encrypted**. Run `./secrets.sh check`
+before committing any change that touches it; it exits non-zero on a plaintext
+file. Never commit `.vault_pass` (gitignored). Never write a real token into
 `vault.example.yml` — that file is plaintext.
+
+Never write plaintext to `vault.yml` as an intermediate step, even if you
+encrypt it immediately after. A failure in between leaves a plaintext file at
+the exact path the README tells the user to commit. `secrets.sh init` encrypts
+from the template straight to the destination with `--output` for this reason.
 
 ## Verifying changes
 
