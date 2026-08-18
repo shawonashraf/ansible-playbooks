@@ -103,6 +103,46 @@ Several things downstream depend on this: `claude-sync` commits your backups,
 and shell-sync commits your profile. Both fall back to a placeholder identity
 when git has none configured.
 
+### Commit signing
+
+`playbook-devtools.yml` configures git to sign every commit and tag with an ssh
+key, matching `gpg.format=ssh`:
+
+```
+gpg.format                 ssh
+user.signingkey            ~/.ssh/id_ed25519.pub
+commit.gpgsign             true
+tag.gpgsign                true
+gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
+```
+
+The key comes from `vault_ssh_signing_key` when you provide one, so the same
+signing identity carries across machines and one registered key verifies them
+all. Only the private half is stored; the public key is derived from it. Leave
+it empty and a passphrase-less ed25519 key is generated on the machine instead.
+The key is written at mode `0600` into a `0700` `~/.ssh`.
+
+A passphrase-less key is deliberate. Signing here runs outside any ssh-agent,
+so a passphrase would make every commit prompt for it.
+
+The play also writes `~/.ssh/allowed_signers` from your `git_user_email`, which
+is what lets `git log --show-signature` verify your own commits instead of
+reporting them as signed by an unknown key.
+
+> [!IMPORTANT]
+> Signing locally is not the same as GitHub showing commits as **Verified**.
+> The public key must also be registered as a *signing* key, which is a
+> different thing from an authentication key. The play prints the command:
+>
+> ```bash
+> gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title fedora
+> ```
+>
+> That needs the `admin:ssh_signing_key` scope, which `gh auth login` does not
+> grant by default.
+
+Set `git_signing.enabled: false` to leave git's signing settings alone.
+
 ### Private repositories
 
 List repositories to restore onto a new machine in `config.yml`:

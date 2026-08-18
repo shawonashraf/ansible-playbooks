@@ -33,6 +33,18 @@ tailscale_auth_key: "{{ vault_tailscale_auth_key | default('') }}"
 git_user_name: "{{ vault_git_user_name | default('') }}"
 git_user_email: "{{ vault_git_user_email | default('') }}"
 
+# Private key used to sign commits. Optional: when empty, a passphrase-less
+# ed25519 key is generated on the machine instead. Vault it to keep one signing
+# identity across machines, so a single key registered on GitHub verifies them
+# all. The public half is derived from it, so it does not need storing.
+ssh_signing_key: "{{ vault_ssh_signing_key | default('') }}"
+
+# Signs every commit and tag with an ssh key, matching git's gpg.format=ssh.
+# Set enabled: false to leave git's signing settings alone.
+git_signing:
+  enabled: true
+  key_path: "{{ target_user_home }}/.ssh/id_ed25519"
+
 # --- Shell configuration ------------------------------------------------------
 # The repository holding your shell profiles. Point this at your own fork.
 # Cloned with github_token when the URL is a private https:// GitHub repo.

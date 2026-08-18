@@ -23,6 +23,8 @@
           - patch
           - python3-devel
           - zsh
+          # git shells out to ssh-keygen -Y sign when gpg.format is ssh
+          - openssh-clients
         state: present
 
     - name: Add Docker repository
@@ -157,3 +159,83 @@
       loop_control:
         label: "{{ item.name }}"
       when: item.value | length > 0
+
+    - name: Set up ssh commit signing
+      when: git_signing.enabled
+      block:
+
+        - name: Ensure ~/.ssh exists
+          file:
+            path: "{{ git_signing.key_path | dirname }}"
+            state: directory
+            mode: "0700"
+
+        - name: Install the signing key from the vault
+          copy:
+            content: "{{ ssh_signing_key | trim }}\n"
+            dest: "{{ git_signing.key_path }}"
+            mode: "0600"
+          when: ssh_signing_key | length > 0
+          no_log: true
+
+        - name: Generate a signing key when the vault has none
+          # -N '' leaves the key without a passphrase. A passphrase would make
+          # every commit prompt, since signing runs outside any ssh-agent here.
+          command: >-
+            ssh-keygen -t ed25519 -N '' -f {{ git_signing.key_path }}
+            -C "{{ git_user_email | default(target_user, true) }}"
+          args:
+            creates: "{{ git_signing.key_path }}"
+          when: ssh_signing_key | length == 0
+
+        - name: Derive the public key
+          # The vault stores only the private half, and ssh-keygen -Y sign
+          # needs the .pub beside it.
+          shell: >-
+            ssh-keygen -y -f {{ git_signing.key_path }}
+            > {{ git_signing.key_path }}.pub
+          args:
+            creates: "{{ git_signing.key_path }}.pub"
+
+        - name: Restrict the private key
+          file:
+            path: "{{ git_signing.key_path }}"
+            mode: "0600"
+
+        - name: Read the public key
+          slurp:
+            src: "{{ git_signing.key_path }}.pub"
+          register: signing_pubkey
+
+        - name: Configure git to sign with it
+          community.general.git_config:
+            name: "{{ item.name }}"
+            scope: global
+            value: "{{ item.value }}"
+          loop:
+            - { name: "gpg.format", value: "ssh" }
+            - { name: "user.signingkey", value: "{{ git_signing.key_path }}.pub" }
+            - { name: "commit.gpgsign", value: "true" }
+            - { name: "tag.gpgsign", value: "true" }
+            - { name: "gpg.ssh.allowedSignersFile", value: "{{ git_signing.key_path | dirname }}/allowed_signers" }
+          loop_control:
+            label: "{{ item.name }}"
+
+        - name: Record the key as a trusted signer
+          # Without this git log --show-signature reports every commit as
+          # signed by an unknown key, including your own.
+          copy:
+            content: "{{ git_user_email }} {{ signing_pubkey.content | b64decode | trim }}\n"
+            dest: "{{ git_signing.key_path | dirname }}/allowed_signers"
+            mode: "0644"
+          when: git_user_email | length > 0
+
+        - name: Show how to register the key with GitHub
+          # Commits sign locally either way, but GitHub marks them Verified
+          # only once the public key is registered as a signing key. gh needs
+          # the admin:ssh_signing_key scope, which is not granted by default.
+          debug:
+            msg:
+              - "Register this key with GitHub for commits to show as Verified:"
+              - "  gh ssh-key add {{ git_signing.key_path }}.pub --type signing --title {{ inventory_hostname }}"
+              - "{{ signing_pubkey.content | b64decode | trim }}"

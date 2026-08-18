@@ -116,6 +116,23 @@ Never run `claude-sync restore` while testing on a development machine: it shell
 out to `claude plugin install` against the real `~/.claude`, regardless of
 `CLAUDE_SYNC_HOME`.
 
+## Commit signing (in playbook-devtools)
+
+Generated keys use `ssh-keygen -N ''`. A passphrase would make every commit
+prompt, because git's `ssh-keygen -Y sign` runs with no agent here.
+
+The vault holds only the private key; the `.pub` is derived with
+`ssh-keygen -y` and gated on `creates:`. Do not add a separate vault entry for
+the public half — it would be one more thing to keep in step.
+
+`commit.gpgsign=true` is global, so any breakage in the key makes *every* commit
+fail, not just signed ones. Keep the key tasks ordered before the git_config
+tasks.
+
+Registering a signing key on GitHub needs the `admin:ssh_signing_key` scope,
+which is distinct from `admin:public_key` and is not granted by a default
+`gh auth login`. The play prints instructions rather than attempting it.
+
 ## Verifying changes
 
 The playbooks target Fedora and cannot be fully run on macOS. What does work
