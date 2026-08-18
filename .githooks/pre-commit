@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# Rejects a commit that would put an unencrypted ansible vault into git.
+#
+# Checks the staged content rather than the working tree: decrypting a vault
+# locally is normal, committing it is not. Only files actually going into this
+# commit are inspected.
+#
+# Enable with:  ./fedora/secrets.sh install-hooks
+set -euo pipefail
+
+fail=0
+
+# --diff-filter=ACM skips deletions, whose staged content cannot be read.
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+
+while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    case "$(basename "$file")" in
+        # Committed plaintext on purpose: it is a template with no real values.
+        vault.example.yml) continue ;;
+        vault*.yml|vault*.yaml) ;;
+        *) continue ;;
+    esac
+
+    # Read what is staged, which is not necessarily what is on disk.
+    if ! git show ":$file" 2>/dev/null | head -1 | grep -q '^\$ANSIBLE_VAULT'; then
+        printf 'BLOCKED: %s is staged unencrypted.\n' "$file" >&2
+        fail=1
+    fi
+done <<< "$staged"
+
+while IFS= read -r file; do
+    [ -n "$file" ] || continue
+    if [ "$(basename "$file")" = ".vault_pass" ]; then
+        printf 'BLOCKED: %s is the vault password and must never be committed.\n' "$file" >&2
+        fail=1
+    fi
+done <<< "$staged"
+
+if [ "$fail" -ne 0 ]; then
+    cat >&2 <<'MSG'
+
+Encrypt it before committing:
+
+    cd fedora && ./secrets.sh check     # confirm what is wrong
+    ../.venv/bin/ansible-vault encrypt group_vars/all/vault.yml
+
+To commit anyway (you almost certainly do not want to):
+
+    git commit --no-verify
+MSG
+    exit 1
+fi
+
+exit 0

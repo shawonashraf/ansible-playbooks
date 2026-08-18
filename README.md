@@ -85,6 +85,21 @@ without your credentials.
 > Only ever commit `vault.yml` in encrypted form. Run `./secrets.sh check`
 > before committing; it exits non-zero if the file is plaintext.
 
+There is a pre-commit hook that enforces this. Git hooks are not themselves
+committed, so each clone has to opt in once:
+
+```bash
+cd fedora
+./secrets.sh install-hooks
+```
+
+That points `core.hooksPath` at the committed [`.githooks/`](.githooks/)
+directory. The hook rejects a commit that stages any `vault*.yml` which is not
+`$ANSIBLE_VAULT` encrypted, and refuses `.vault_pass` outright. It reads the
+*staged* content, not the working tree, so decrypting a vault locally is fine —
+only committing it is blocked. `vault.example.yml` is exempt, being a plaintext
+template by design.
+
 ### Git identity
 
 `playbook-devtools.yml` sets the global git identity from the vault:

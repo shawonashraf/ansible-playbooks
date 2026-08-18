@@ -66,7 +66,8 @@ rather than fail.
 
 `group_vars/all/vault.yml` is committed **encrypted**. Run `./secrets.sh check`
 before committing any change that touches it; it exits non-zero on a plaintext
-file. Never commit `.vault_pass` (gitignored). Never write a real token into
+file. `.githooks/pre-commit` enforces the same rule, but only in clones that ran
+`./fedora/secrets.sh install-hooks` — do not rely on it being active. Never commit `.vault_pass` (gitignored). Never write a real token into
 `vault.example.yml` — that file is plaintext.
 
 Never write plaintext to `vault.yml` as an intermediate step, even if you

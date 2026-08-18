@@ -34,6 +34,9 @@ Usage: ./secrets.sh <command>
   view    Print the decrypted vault to stdout.
   rekey   Change the vault password.
   check   Verify vault.yml is encrypted. Use before committing.
+  install-hooks
+          Point git at .githooks, enabling the pre-commit check that
+          rejects an unencrypted vault. Run once per clone.
 
 The vault password is read from .vault_pass when that file exists (it is
 gitignored); otherwise you are prompted for it.
@@ -69,6 +72,13 @@ case "${1:-}" in
       echo "DANGER: $VAULT is NOT encrypted. Do not commit it." >&2
       exit 1
     fi
+    ;;
+  install-hooks)
+    # Hooks live in .git/hooks, which is not committed, so every clone has to
+    # opt in. core.hooksPath lets the repository ship them instead.
+    root=$(git rev-parse --show-toplevel)
+    git -C "$root" config core.hooksPath .githooks
+    echo "Enabled the hooks in .githooks for this clone."
     ;;
   ""|-h|--help|help)
     usage
