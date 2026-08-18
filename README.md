@@ -85,6 +85,24 @@ without your credentials.
 > Only ever commit `vault.yml` in encrypted form. Run `./secrets.sh check`
 > before committing; it exits non-zero if the file is plaintext.
 
+### Git identity
+
+`playbook-devtools.yml` sets the global git identity from the vault:
+
+```yaml
+vault_git_user_name: "Your Name"
+vault_git_user_email: "you@example.com"
+```
+
+These are vaulted because an email address is personal data that should not sit
+in a repository meant to be shared. Either value left empty leaves the
+corresponding git setting alone, so a run without a vault will not wipe an
+identity you already have.
+
+Several things downstream depend on this: `claude-sync` commits your backups,
+and shell-sync commits your profile. Both fall back to a placeholder identity
+when git has none configured.
+
 ### Private repositories
 
 List repositories to restore onto a new machine in `config.yml`:

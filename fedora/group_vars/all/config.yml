@@ -27,6 +27,12 @@ wandb_api_key: "{{ vault_wandb_api_key | default('') }}"
 pypi_token: "{{ vault_pypi_token | default('') }}"
 tailscale_auth_key: "{{ vault_tailscale_auth_key | default('') }}"
 
+# Global git identity. Vaulted because an email address is personal data that
+# should not sit in a repository meant to be shared. Either left empty leaves
+# the corresponding git setting untouched.
+git_user_name: "{{ vault_git_user_name | default('') }}"
+git_user_email: "{{ vault_git_user_email | default('') }}"
+
 # --- Shell configuration ------------------------------------------------------
 # The repository holding your shell profiles. Point this at your own fork.
 # Cloned with github_token when the URL is a private https:// GitHub repo.

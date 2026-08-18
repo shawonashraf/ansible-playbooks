@@ -137,4 +137,23 @@
       args:
         creates: "{{ target_user_home }}/.local/bin/uv"
 
+# Runs as target_user rather than the invoking account: git_config with
+# scope: global writes to the executing user's ~/.gitconfig.
+- hosts: all
+  become: true
+  become_user: "{{ target_user }}"
 
+  tasks:
+    - name: Set the global git identity
+      # Left untouched when the vault has no value, so a run without secrets
+      # does not wipe an identity that is already configured.
+      community.general.git_config:
+        name: "{{ item.name }}"
+        scope: global
+        value: "{{ item.value }}"
+      loop:
+        - { name: "user.name", value: "{{ git_user_name }}" }
+        - { name: "user.email", value: "{{ git_user_email }}" }
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.value | length > 0

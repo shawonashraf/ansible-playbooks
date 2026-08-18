@@ -12,3 +12,7 @@ vault_huggingface_token: ""
 vault_wandb_api_key: ""
 vault_pypi_token: ""
 vault_tailscale_auth_key: ""
+
+# Global git identity.
+vault_git_user_name: ""
+vault_git_user_email: ""
