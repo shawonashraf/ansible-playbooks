@@ -1,0 +1,9 @@
+---
+- hosts: all
+  become: true
+
+  tasks:
+    - name: Install Tailscale
+      ansible.builtin.shell: curl -fsSL https://tailscale.com/install.sh | sh
+      args:
+        creates: /usr/bin/tailscale

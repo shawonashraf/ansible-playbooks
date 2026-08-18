@@ -1,0 +1,33 @@
+---
+- hosts: all
+  become: true
+  tasks:
+    - name: Enable the universe, multiverse and restricted components
+      # Ubuntu's rough equivalent of RPM Fusion: multiverse/restricted carry
+      # the codecs and Steam, universe carries most of the tooling installed
+      # by the later playbooks.
+      command: add-apt-repository -y {{ item }}
+      loop:
+        - universe
+        - multiverse
+        - restricted
+
+    - name: Update apt cache and upgrade the system
+      apt:
+        update_cache: true
+        upgrade: dist
+
+    - name: Accept the mscorefonts EULA ahead of time
+      # ubuntu-restricted-extras pulls in ttf-mscorefonts-installer, whose
+      # debconf EULA prompt would hang an unattended run.
+      debconf:
+        name: ttf-mscorefonts-installer
+        question: msttcorefonts/accepted-mscorefonts-eula
+        value: "true"
+        vtype: select
+
+    - name: Install ubuntu-restricted-extras
+      # Covers what "Enable H.264" does on Fedora: patented codecs and fonts.
+      apt:
+        name: ubuntu-restricted-extras
+        state: present

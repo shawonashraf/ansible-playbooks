@@ -1,0 +1,28 @@
+---
+# Template for group_vars/all/vault.yml. This file is plaintext and committed;
+# the real vault.yml is ansible-vault encrypted. Create yours with:
+#
+#     ./secrets.sh init
+#
+# Leave any value you do not need as an empty string. Nothing here is required.
+vault_github_token: ""
+vault_anthropic_api_key: ""
+vault_openai_api_key: ""
+vault_huggingface_token: ""
+vault_wandb_api_key: ""
+vault_pypi_token: ""
+vault_tailscale_auth_key: ""
+
+# Global git identity.
+vault_git_user_name: ""
+vault_git_user_email: ""
+
+# Optional. Paste a passphrase-less ed25519 private key to reuse one signing
+# identity across machines; leave empty to generate a new key per machine.
+# Must be a YAML block scalar so the newlines survive:
+#
+#   vault_ssh_signing_key: |
+#     -----BEGIN OPENSSH PRIVATE KEY-----
+#     ...
+#     -----END OPENSSH PRIVATE KEY-----
+vault_ssh_signing_key: ""

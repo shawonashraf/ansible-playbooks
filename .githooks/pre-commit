@@ -43,7 +43,7 @@ if [ "$fail" -ne 0 ]; then
 
 Encrypt it before committing:
 
-    cd fedora && ./secrets.sh check     # confirm what is wrong
+    cd fedora && ./secrets.sh check     # or cd ubuntu, for that vault
     ../.venv/bin/ansible-vault encrypt group_vars/all/vault.yml
 
 To commit anyway (you almost certainly do not want to):

@@ -1,0 +1,241 @@
+---
+- hosts: all
+  become: true
+
+  tasks:
+    - name: Install system development packages
+      apt:
+        name:
+          - git
+          - clang
+          - llvm
+          - make
+          - build-essential
+          - curl
+          - libssl-dev
+          - zlib1g-dev
+          - libbz2-dev
+          - libreadline-dev
+          - libsqlite3-dev
+          - libncurses-dev
+          - liblzma-dev
+          - tk-dev
+          - libffi-dev
+          - patch
+          - python3-dev
+          - zsh
+          # git shells out to ssh-keygen -Y sign when gpg.format is ssh
+          - openssh-client
+          # deb822_repository needs it on the managed host
+          - python3-debian
+        state: present
+
+    - name: Add the Docker repository
+      deb822_repository:
+        name: docker
+        types: deb
+        uris: https://download.docker.com/linux/ubuntu
+        suites: "{{ ansible_distribution_release }}"
+        components: stable
+        architectures: "{{ 'arm64' if ansible_architecture == 'aarch64' else 'amd64' }}"
+        signed_by: https://download.docker.com/linux/ubuntu/gpg
+
+    - name: Install Docker Engine
+      apt:
+        update_cache: true
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+
+    - name: Start and enable Docker service
+      systemd:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add user to docker group
+      user:
+        name: "{{ target_user }}"
+        groups: docker
+        append: true
+
+    - name: Install Podman Compose
+      apt:
+        name: podman-compose
+        state: present
+
+    - name: Install gh cli
+      apt:
+        name: gh
+        state: present
+
+    - name: Add the VSCode repository
+      deb822_repository:
+        name: vscode
+        types: deb
+        uris: https://packages.microsoft.com/repos/code
+        suites: stable
+        components: main
+        architectures:
+          - amd64
+          - arm64
+        signed_by: https://packages.microsoft.com/keys/microsoft.asc
+
+    - name: Install VScode
+      apt:
+        update_cache: true
+        name: code
+        state: present
+
+    - name: Install nodejs
+      # Unlike Fedora's, Ubuntu's nodejs package does not pull in npm.
+      apt:
+        name:
+          - nodejs
+          - npm
+        state: present
+
+    - name: Install corepack
+      command: npm i -g corepack
+
+- hosts: all
+  become: false
+  tasks:
+    - name: Enable corepack
+      command: corepack enable
+
+    - name: Install Rust and Cargo
+      shell: |
+        curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+        source $HOME/.cargo/env
+      args:
+        creates: "{{ target_user_home }}/.cargo/bin/rustc"
+
+    - name: Install pyenv
+      shell: |
+        curl https://pyenv.run | bash
+      args:
+        creates: "{{ target_user_home }}/.pyenv/bin/pyenv"
+
+    - name: Configure shell for pyenv
+      blockinfile:
+        path: "{{ target_user_home }}/.bashrc"
+        block: |
+          export PYENV_ROOT="$HOME/.pyenv"
+          export PATH="$PYENV_ROOT/bin:$PATH"
+          eval "$(pyenv init --path)"
+          eval "$(pyenv init -)"
+          export PATH="$HOME/.cargo/bin:$PATH"
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - dev tools"
+        create: true
+
+    - name: Install uv
+      shell: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+      args:
+        creates: "{{ target_user_home }}/.local/bin/uv"
+
+# Runs as target_user rather than the invoking account: git_config with
+# scope: global writes to the executing user's ~/.gitconfig.
+- hosts: all
+  become: true
+  become_user: "{{ target_user }}"
+
+  tasks:
+    - name: Set the global git identity
+      # Left untouched when the vault has no value, so a run without secrets
+      # does not wipe an identity that is already configured.
+      community.general.git_config:
+        name: "{{ item.name }}"
+        scope: global
+        value: "{{ item.value }}"
+      loop:
+        - { name: "user.name", value: "{{ git_user_name }}" }
+        - { name: "user.email", value: "{{ git_user_email }}" }
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.value | length > 0
+
+    - name: Set up ssh commit signing
+      when: git_signing.enabled
+      block:
+
+        - name: Ensure ~/.ssh exists
+          file:
+            path: "{{ git_signing.key_path | dirname }}"
+            state: directory
+            mode: "0700"
+
+        - name: Install the signing key from the vault
+          copy:
+            content: "{{ ssh_signing_key | trim }}\n"
+            dest: "{{ git_signing.key_path }}"
+            mode: "0600"
+          when: ssh_signing_key | length > 0
+          no_log: true
+
+        - name: Generate a signing key when the vault has none
+          # -N '' leaves the key without a passphrase. A passphrase would make
+          # every commit prompt, since signing runs outside any ssh-agent here.
+          command: >-
+            ssh-keygen -t ed25519 -N '' -f {{ git_signing.key_path }}
+            -C "{{ git_user_email | default(target_user, true) }}"
+          args:
+            creates: "{{ git_signing.key_path }}"
+          when: ssh_signing_key | length == 0
+
+        - name: Derive the public key
+          # The vault stores only the private half, and ssh-keygen -Y sign
+          # needs the .pub beside it.
+          shell: >-
+            ssh-keygen -y -f {{ git_signing.key_path }}
+            > {{ git_signing.key_path }}.pub
+          args:
+            creates: "{{ git_signing.key_path }}.pub"
+
+        - name: Restrict the private key
+          file:
+            path: "{{ git_signing.key_path }}"
+            mode: "0600"
+
+        - name: Read the public key
+          slurp:
+            src: "{{ git_signing.key_path }}.pub"
+          register: signing_pubkey
+
+        - name: Configure git to sign with it
+          community.general.git_config:
+            name: "{{ item.name }}"
+            scope: global
+            value: "{{ item.value }}"
+          loop:
+            - { name: "gpg.format", value: "ssh" }
+            - { name: "user.signingkey", value: "{{ git_signing.key_path }}.pub" }
+            - { name: "commit.gpgsign", value: "true" }
+            - { name: "tag.gpgsign", value: "true" }
+            - { name: "gpg.ssh.allowedSignersFile", value: "{{ git_signing.key_path | dirname }}/allowed_signers" }
+          loop_control:
+            label: "{{ item.name }}"
+
+        - name: Record the key as a trusted signer
+          # Without this git log --show-signature reports every commit as
+          # signed by an unknown key, including your own.
+          copy:
+            content: "{{ git_user_email }} {{ signing_pubkey.content | b64decode | trim }}\n"
+            dest: "{{ git_signing.key_path | dirname }}/allowed_signers"
+            mode: "0644"
+          when: git_user_email | length > 0
+
+        - name: Show how to register the key with GitHub
+          # Commits sign locally either way, but GitHub marks them Verified
+          # only once the public key is registered as a signing key. gh needs
+          # the admin:ssh_signing_key scope, which is not granted by default.
+          debug:
+            msg:
+              - "Register this key with GitHub for commits to show as Verified:"
+              - "  gh ssh-key add {{ git_signing.key_path }}.pub --type signing --title {{ inventory_hostname }}"
+              - "{{ signing_pubkey.content | b64decode | trim }}"

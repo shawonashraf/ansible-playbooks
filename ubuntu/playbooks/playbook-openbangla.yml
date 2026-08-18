@@ -1,0 +1,10 @@
+---
+- hosts: all
+  become: true
+
+  tasks:
+    - name: Install OpenBangla Keyboard
+      # The upstream installer detects Ubuntu and installs the right .deb.
+      shell: wget -q https://raw.githubusercontent.com/OpenBangla/OpenBangla-Keyboard/master/tools/install.sh -O - | bash
+      args:
+        creates: /usr/bin/openbangla-keyboard

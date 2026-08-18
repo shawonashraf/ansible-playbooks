@@ -1,6 +1,8 @@
 # ansible-playbooks
 
-Ansible playbooks for automating post-OS-installation setup. Currently covers Fedora.
+Ansible playbooks for automating post-OS-installation setup. Covers Fedora and
+Ubuntu — `fedora/` and `ubuntu/` are parallel setups with the same layout and
+configuration; the examples below use `fedora`, substitute `ubuntu` as needed.
 
 ## Setup
 
@@ -264,7 +266,8 @@ it resolves.
 ```
 pyproject.toml / uv.lock   pinned Ansible
 CLAUDE.md                  conventions for AI agents working in this repo
-fedora/
+fedora/                    Fedora setup
+ubuntu/                    Ubuntu setup, same structure
   ansible.cfg              inventory and output settings
   inventory.ini            localhost, local connection
   run.sh                   entry point

@@ -1,0 +1,17 @@
+---
+# playbook-preflight must stay first: it resolves target_user_home,
+# which the devtools, agents and flatpaks playbooks depend on.
+- import_playbook: playbooks/playbook-preflight.yml
+- import_playbook: playbooks/playbook-starter.yml
+- import_playbook: playbooks/playbook-utils.yml
+- import_playbook: playbooks/playbook-devtools.yml
+- import_playbook: playbooks/playbook-flatpaks.yml
+- import_playbook: playbooks/playbook-media.yml
+- import_playbook: playbooks/playbook-browsers.yml
+- import_playbook: playbooks/playbook-openbangla.yml
+- import_playbook: playbooks/playbook-gaming.yml
+- import_playbook: playbooks/playbook-agents.yml
+- import_playbook: playbooks/playbook-creative.yml
+# Last on purpose: it replaces ~/.zshrc, including the PATH blocks the
+# devtools and agents playbooks write into it.
+- import_playbook: playbooks/playbook-shell.yml

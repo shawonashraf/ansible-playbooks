@@ -1,0 +1,56 @@
+---
+# Ubuntu ships snap, not flatpak, so the runtime has to be installed first.
+- hosts: all
+  become: true
+  tasks:
+    - name: Install flatpak
+      apt:
+        name: flatpak
+        state: present
+
+- hosts: all
+  become: true
+  become_user: "{{ target_user }}"
+  vars:
+    flatpaks:
+      - io.github.kolunmi.Bazaar
+      - com.discordapp.Discord
+      - com.spotify.Client
+      - com.github.tchx84.Flatseal
+      - org.signal.Signal
+      - com.obsproject.Studio
+      - org.filezillaproject.Filezilla
+      - io.podman_desktop.PodmanDesktop
+      - com.github.jeromerobert.pdfarranger
+      - de.haeckerfelix.Shortwave
+      - com.anydesk.Anydesk
+      - org.localsend.localsend_app
+      - org.torproject.torbrowser-launcher
+      - org.zotero.Zotero
+      - org.mozilla.Thunderbird
+      - io.github.getnf.embellish
+      - io.github.ronniedroid.concessio
+      - re.sonny.Eloquent
+      - io.github.dvlv.boxbuddyrs
+      - net.davidotek.pupgui2
+      - com.github.Matoking.protontricks
+      - com.heroicgameslauncher.hgl
+      # A dnf package on Fedora; Ubuntu has no deb, flatpak is the
+      # officially supported install there.
+      - com.usebottles.bottles
+
+  tasks:
+    - name: Add Flathub remote for user
+      flatpak_remote:
+        name: flathub
+        state: present
+        flatpakrepo_url: https://dl.flathub.org/repo/flathub.flatpakrepo
+        method: user
+
+    - name: Install Flatpak applications for user
+      flatpak:
+        name: "{{ item }}"
+        state: present
+        remote: flathub
+        method: user
+      loop: "{{ flatpaks }}"

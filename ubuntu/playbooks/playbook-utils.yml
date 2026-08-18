@@ -1,0 +1,54 @@
+---
+- hosts: all
+  become: true
+  tasks:
+    - name: Install htop, btop
+      apt:
+        name:
+          - htop
+          - btop
+        state: present
+
+    - name: Install wl-clipboard
+      apt:
+        name: wl-clipboard
+        state: present
+
+    - name: Install tree
+      apt:
+        name: tree
+        state: present
+
+    - name: Install fastfetch
+      apt:
+        name: fastfetch
+        state: present
+
+    - name: Install onefetch
+      # Not in the Ubuntu archive (Fedora uses a copr for it); the project
+      # ships an official .deb with its releases.
+      apt:
+        deb: https://github.com/o2sh/onefetch/releases/latest/download/onefetch_amd64.deb
+
+    - name: Install wget
+      apt:
+        name: wget
+        state: present
+
+    # Bottles has no Ubuntu package; it is installed as a flatpak in
+    # playbook-flatpaks.yml instead.
+
+    - name: Install btrfs-assistant
+      apt:
+        name: btrfs-assistant
+        state: present
+
+    - name: Install gparted
+      apt:
+        name: gparted
+        state: present
+
+    - name: Install Distrobox
+      apt:
+        name: distrobox
+        state: present

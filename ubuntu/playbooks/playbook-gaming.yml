@@ -1,0 +1,30 @@
+---
+- hosts: all
+  become: true
+
+  tasks:
+    - name: Install Steam
+      # multiverse, enabled by the starter playbook.
+      apt:
+        name: steam-installer
+        state: present
+    - name: Install Steam Devices
+      apt:
+        name: steam-devices
+        state: present
+    - name: Install Lutris
+      apt:
+        name: lutris
+        state: present
+    - name: Install MangoHud
+      apt:
+        name: mangohud
+        state: present
+    - name: Install vkBasalt
+      apt:
+        name: vkbasalt
+        state: present
+    - name: Install GameMode
+      apt:
+        name: gamemode
+        state: present

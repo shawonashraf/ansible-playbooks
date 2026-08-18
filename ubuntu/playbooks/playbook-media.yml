@@ -1,0 +1,28 @@
+---
+- hosts: all
+  become: true
+  tasks:
+    - name: Install the full codec set
+      # Fedora's "dnf group install multimedia" equivalent; the rest of the
+      # patented pieces come from ubuntu-restricted-extras in the starter.
+      apt:
+        name: libavcodec-extra
+        state: present
+
+    - name: Install VLC
+      apt:
+        name: vlc
+        state: present
+
+    - name: Install MPV
+      apt:
+        name: mpv
+        state: present
+
+    - name: Install handbrake
+      # Ubuntu's "handbrake" is the GUI; the CLI is a separate package.
+      apt:
+        name:
+          - handbrake
+          - handbrake-cli
+        state: present
