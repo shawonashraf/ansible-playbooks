@@ -7,6 +7,10 @@
       dnf:
         name: steam
         state: present
+    - name: Install Steam Devices
+      dnf:
+        name: steam-devices
+        state: present
     - name: Install Lutris
       dnf:
         name: lutris
@@ -23,7 +27,7 @@
       dnf:
         name: gamemode
         state: present  
-    - name: Install Steam-Devices
+    - name: Install Gamemode
       dnf:
-        name: steam-devices
+        name: gamemode
         state: present

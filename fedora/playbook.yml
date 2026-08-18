@@ -1,6 +1,5 @@
 ---
 - import_playbook: playbooks/playbook-starter.yml
-- import_playbook: playbooks/playbook-tlp.yml
 - import_playbook: playbooks/playbook-utils.yml
 - import_playbook: playbooks/playbook-devtools.yml
 - import_playbook: playbooks/playbook-flatpaks.yml
