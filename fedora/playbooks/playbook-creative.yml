@@ -1,0 +1,15 @@
+---
+- hosts: all
+  become: true
+
+  tasks:
+    - name: Install Rawtherapee
+      dnf:
+        name:
+          - rawtherapee
+        state: present
+    - name: Install Darktable
+      dnf:
+        name:
+          - darktable
+        state: present
