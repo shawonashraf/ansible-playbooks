@@ -23,7 +23,33 @@ github_token: "{{ vault_github_token | default('') }}"
 anthropic_api_key: "{{ vault_anthropic_api_key | default('') }}"
 openai_api_key: "{{ vault_openai_api_key | default('') }}"
 huggingface_token: "{{ vault_huggingface_token | default('') }}"
+wandb_api_key: "{{ vault_wandb_api_key | default('') }}"
+pypi_token: "{{ vault_pypi_token | default('') }}"
 tailscale_auth_key: "{{ vault_tailscale_auth_key | default('') }}"
+
+# --- Shell configuration ------------------------------------------------------
+# The repository holding your shell profiles. Point this at your own fork.
+# Cloned with github_token when the URL is a private https:// GitHub repo.
+# Set url to "" to skip playbook-shell entirely.
+configs_repo:
+  url: "https://github.com/shawonashraf/configs.git"
+  version: main
+  dest: "{{ target_user_home }}/Projects/configs"
+  # Selects shell/zshrc-<profile> from that repository.
+  profile: fedora
+
+# Credentials the shell profile expects in the environment. These are written
+# to ~/.secrets.env (mode 0600) and the matching "export NAME=" lines are
+# stripped from the installed ~/.zshrc, so tokens never sit in a tracked file.
+# Add entries freely: the key is the variable name the shell sees.
+shell_secrets:
+  WANDB_API_KEY: "{{ wandb_api_key }}"
+  HF_TOKEN: "{{ huggingface_token }}"
+  PYPI_TOKEN: "{{ pypi_token }}"
+
+# shell-sync commits and pushes ~/.zshrc automatically. Left off because that
+# would push any credential pasted into a live shell without review.
+configs_shell_sync: false
 
 # --- Private repositories to restore -----------------------------------------
 # Repos cloned onto a fresh machine. dest is expanded relative to target_user's

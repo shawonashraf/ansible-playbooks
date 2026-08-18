@@ -1,0 +1,149 @@
+---
+# Restores the zsh configuration from the configs repository.
+#
+# Runs last: it installs ~/.zshrc wholesale, which replaces the PATH blocks
+# playbook-devtools and playbook-agents add. The restored profile sets those
+# paths itself, so the ordering is deliberate rather than incidental.
+- hosts: all
+  become: true
+
+  tasks:
+    - name: Install packages the shell profile needs at startup
+      dnf:
+        name:
+          - zsh
+          - git
+          - curl
+          # The profile calls gpg-connect-agent on every prompt.
+          - gnupg2
+        state: present
+      when: configs_repo.url | length > 0
+
+- hosts: all
+  become: true
+  become_user: "{{ target_user }}"
+
+  vars:
+    configs_shell_dir: "{{ configs_repo.dest }}/shell"
+    secrets_env_file: "{{ target_user_home }}/.secrets.env"
+    # A private repo needs credentials over https. An ssh remote uses the
+    # user's key instead, so the token is only injected for https URLs.
+    configs_clone_url: >-
+      {{ configs_repo.url | regex_replace('^https://', 'https://oauth2:' ~ github_token ~ '@')
+         if (github_token | length > 0 and configs_repo.url.startswith('https://'))
+         else configs_repo.url }}
+
+  tasks:
+    - name: Skip the shell setup when no configs repository is configured
+      debug:
+        msg: "configs_repo.url is empty, skipping shell configuration."
+      when: configs_repo.url | length == 0
+
+    - name: Set up the shell configuration
+      when: configs_repo.url | length > 0
+      block:
+
+        - name: Ensure the parent directory of the checkout exists
+          file:
+            path: "{{ configs_repo.dest | dirname }}"
+            state: directory
+            mode: "0755"
+
+        - name: Clone the configs repository
+          git:
+            repo: "{{ configs_clone_url }}"
+            dest: "{{ configs_repo.dest }}"
+            version: "{{ configs_repo.version }}"
+            # Never touch an existing checkout: it is the user's working copy
+            # and may hold uncommitted work.
+            update: false
+          no_log: true
+
+        - name: Strip the token from the stored remote URL
+          # git writes the clone URL into .git/config verbatim, which would
+          # leave the token readable on disk for the life of the checkout.
+          command: git remote set-url origin {{ configs_repo.url }}
+          args:
+            chdir: "{{ configs_repo.dest }}"
+          changed_when: false
+          when: configs_clone_url != configs_repo.url
+
+        - name: Check whether oh-my-zsh is already installed
+          stat:
+            path: "{{ target_user_home }}/.oh-my-zsh"
+          register: oh_my_zsh
+
+        - name: Bootstrap oh-my-zsh, its plugins and the theme
+          # setup.sh installs oh-my-zsh with KEEP_ZSHRC, clones the four
+          # plugins and the catppuccin theme, links catppuccin.zsh-theme to
+          # the name ZSH_THEME expects, and prepares ~/.gnupg.
+          #
+          # --chsh is deliberately omitted: it shells out to chsh, which
+          # prompts for a password under PAM and would hang the run. The
+          # login shell is set with the user module below instead.
+          command: >-
+            ./setup.sh
+            --os {{ configs_repo.profile }}
+            {{ '' if configs_shell_sync else '--no-sync' }}
+          args:
+            chdir: "{{ configs_repo.dest }}"
+          when: not oh_my_zsh.stat.exists
+          register: setup_sh
+          changed_when: true
+
+        - name: Read the shell profile from the checkout
+          slurp:
+            src: "{{ configs_shell_dir }}/zshrc-{{ configs_repo.profile }}"
+          register: zshrc_source
+
+        - name: Build the profile with credentials and hardcoded paths removed
+          # Drops every "export NAME=" line for a name in shell_secrets, and
+          # rewrites the opencode PATH entry, which the saved profile pins to
+          # one user's home directory.
+          set_fact:
+            zshrc_body: >-
+              {{ zshrc_source['content'] | b64decode
+                 | regex_replace('(?m)^[ \t]*export[ \t]+(' ~ (shell_secrets.keys() | join('|')) ~ ')=.*$', '')
+                 | regex_replace('/home/[^/\s:"]+/\.opencode', '$HOME/.opencode') }}
+          no_log: true
+
+        - name: Write the credentials the profile expects
+          copy:
+            content: |
+              # Written by ansible from group_vars/all/vault.yml.
+              # Not tracked in git. Sourced by ~/.zshrc.
+              {% for name, value in shell_secrets.items() if value | length > 0 %}
+              export {{ name }}={{ value | quote }}
+              {% endfor %}
+            dest: "{{ secrets_env_file }}"
+            mode: "0600"
+          no_log: true
+
+        - name: Install the shell profile
+          copy:
+            content: |
+              # Credentials live outside this file so it stays safe to commit.
+              [ -f "$HOME/.secrets.env" ] && source "$HOME/.secrets.env"
+
+              {{ zshrc_body }}
+            dest: "{{ target_user_home }}/.zshrc"
+            mode: "0644"
+            backup: true
+          no_log: true
+
+- hosts: all
+  become: true
+
+  tasks:
+    - name: Locate the zsh binary
+      # command -v is a shell builtin, so this needs the shell module.
+      shell: command -v zsh
+      register: zsh_path
+      changed_when: false
+      when: configs_repo.url | length > 0
+
+    - name: Make zsh the login shell for {{ target_user }}
+      user:
+        name: "{{ target_user }}"
+        shell: "{{ zsh_path.stdout }}"
+      when: configs_repo.url | length > 0

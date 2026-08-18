@@ -98,6 +98,54 @@ private_repos:
     private: true   # clone using github_token
 ```
 
+## Shell configuration
+
+`playbook-shell.yml` restores zsh from a separate configs repository. It runs
+last, because it installs `~/.zshrc` wholesale and would otherwise be overwritten
+by the PATH blocks the devtools and agents playbooks add.
+
+Point it at your own repository in `config.yml`:
+
+```yaml
+configs_repo:
+  url: "https://github.com/youruser/configs.git"
+  version: main
+  dest: "{{ target_user_home }}/Projects/configs"
+  profile: fedora     # selects shell/zshrc-fedora
+```
+
+Set `url: ""` to skip the playbook entirely. A private repository is cloned
+using `github_token` from the vault; the token is stripped from the checkout's
+remote URL afterwards so it is not left readable in `.git/config`.
+
+The repository is expected to provide a `setup.sh` and `shell/zshrc-<profile>`.
+`setup.sh` is run once, when `~/.oh-my-zsh` is missing, to install oh-my-zsh,
+its plugins and the theme. Ansible manages `~/.zshrc` on every run after that,
+so repeated runs stay idempotent. The login shell is switched to zsh with
+Ansible's `user` module rather than `chsh`, which prompts for a password under
+PAM and would hang an unattended run.
+
+### Keeping credentials out of the profile
+
+Shell profiles often export API tokens directly. Anything named in
+`shell_secrets` is written to `~/.secrets.env` (mode `0600`) from the vault, and
+the matching `export NAME=` lines are stripped from the installed `~/.zshrc`,
+which sources that file at the top:
+
+```yaml
+shell_secrets:
+  WANDB_API_KEY: "{{ wandb_api_key }}"
+  HF_TOKEN: "{{ huggingface_token }}"
+  PYPI_TOKEN: "{{ pypi_token }}"
+```
+
+Add entries as needed; the key is the variable name the shell sees. A secret
+with no value in the vault is skipped rather than exported empty.
+
+> [!NOTE]
+> This strips the tokens from the copy in `$HOME`, not from your configs
+> repository. Removing them at the source is a separate job.
+
 ## Selecting playbooks
 
 Comment out any import you do not want in [`fedora/playbook.yml`](fedora/playbook.yml).

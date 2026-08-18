@@ -74,6 +74,26 @@ encrypt it immediately after. A failure in between leaves a plaintext file at
 the exact path the README tells the user to commit. `secrets.sh init` encrypts
 from the template straight to the destination with `--output` for this reason.
 
+## playbook-shell
+
+Restores zsh from the repository named by `configs_repo`. Three things about it
+are easy to break:
+
+`setup.sh` in the configs repo is a **one-time bootstrap**, gated on
+`~/.oh-my-zsh` being absent. It always overwrites `~/.zshrc` from its own copy,
+so running it on every pass would fight Ansible's sanitised version and produce
+a new `.backup-<timestamp>` file each run. Ansible owns `~/.zshrc` after the
+first bootstrap.
+
+**Never pass `--chsh` to `setup.sh`.** It shells out to `chsh`, which prompts for
+a password under PAM and hangs an unattended run. The login shell is set with the
+`user` module under `become: true`.
+
+The profile is sanitised with a `(?m)` multiline `regex_replace`, not by
+splitting on newlines. A `'\n'` written inside a YAML folded scalar (`>-`) does
+not reach Jinja as a newline, so `split('\n')` silently returns a single element
+and every `^`-anchored filter then matches nothing.
+
 ## Verifying changes
 
 The playbooks target Fedora and cannot be fully run on macOS. What does work
