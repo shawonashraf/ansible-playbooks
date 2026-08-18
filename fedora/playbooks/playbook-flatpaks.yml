@@ -8,7 +8,6 @@
       - io.github.kolunmi.Bazaar
       - com.discordapp.Discord
       - com.spotify.Client
-      - org.telegram.desktop
       - com.github.tchx84.Flatseal
       - org.signal.Signal
       - com.obsproject.Studio
@@ -24,8 +23,6 @@
       - io.github.getnf.embellish
       - io.github.ronniedroid.concessio
       - re.sonny.Eloquent
-      - com.spotify.Client
-      - com.github.d4nj1.tlpui
       - io.github.dvlv.boxbuddyrs
       - net.davidotek.pupgui2
       - com.github.Matoking.protontricks

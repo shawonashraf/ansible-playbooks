@@ -6,4 +6,5 @@
 - import_playbook: playbooks/playbook-media.yml
 - import_playbook: playbooks/playbook-browsers.yml
 - import_playbook: playbooks/playbook-openbangla.yml
-# - import_playbook: playbooks/playbook-gaming.yml
+- import_playbook: playbooks/playbook-gaming.yml
+- import_playbook: playbooks/playbook-agents.yml
