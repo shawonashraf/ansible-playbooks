@@ -11,6 +11,7 @@
 - import_playbook: playbooks/playbook-openbangla.yml
 - import_playbook: playbooks/playbook-gaming.yml
 - import_playbook: playbooks/playbook-agents.yml
+- import_playbook: playbooks/playbook-creative.yml
 # Last on purpose: it replaces ~/.zshrc, including the PATH blocks the
 # devtools and agents playbooks write into it.
 - import_playbook: playbooks/playbook-shell.yml
