@@ -14,25 +14,23 @@
 
 - hosts: all
   become: false
-  vars:
-    target_user: shawon
 
   tasks:
     - name: Install Claude Code
       shell: |
         curl -fsSL https://claude.ai/install.sh | bash
       args:
-        creates: "/home/{{ target_user }}/.local/bin/claude"
+        creates: "{{ target_user_home }}/.local/bin/claude"
 
     - name: Install opencode
       shell: |
         curl -fsSL https://opencode.ai/install | bash
       args:
-        creates: "/home/{{ target_user }}/.opencode/bin/opencode"
+        creates: "{{ target_user_home }}/.opencode/bin/opencode"
 
     - name: Configure shell PATH for agent CLIs
       blockinfile:
-        path: "/home/{{ target_user }}/{{ item }}"
+        path: "{{ target_user_home }}/{{ item }}"
         block: |
           export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
         marker: "# {mark} ANSIBLE MANAGED BLOCK - agent clis"

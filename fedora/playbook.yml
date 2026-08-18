@@ -1,4 +1,7 @@
 ---
+# playbook-preflight must stay first: it resolves target_user_home,
+# which the devtools, agents and flatpaks playbooks depend on.
+- import_playbook: playbooks/playbook-preflight.yml
 - import_playbook: playbooks/playbook-starter.yml
 - import_playbook: playbooks/playbook-utils.yml
 - import_playbook: playbooks/playbook-devtools.yml

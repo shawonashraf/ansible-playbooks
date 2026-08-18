@@ -1,0 +1,37 @@
+---
+# Non-secret configuration. Safe to commit.
+# Secret values live in vault.yml (encrypted) and are referenced from here.
+
+# The account these playbooks configure: installs land in this user's home,
+# and this user is the one added to the docker group.
+#
+# Resolved on the machine running ansible, so it is correct whether you run
+# ./run.sh directly or under sudo. Do NOT use ansible_user_id here: the
+# become: true plays gather facts as root and would resolve to "root".
+# Override by replacing the whole expression with a literal username.
+target_user: "{{ lookup('env', 'SUDO_USER') | default(lookup('env', 'USER'), true) }}"
+
+# Home directory of target_user. Left undefined on purpose: playbook-preflight
+# looks it up with getent so non-standard homes work. Set it here to override.
+# target_user_home: /home/someone
+
+# --- Secrets -----------------------------------------------------------------
+# Each maps a friendly name onto a vault_* value. The default('') fallback
+# makes vault.yml optional: without it these are empty strings rather than
+# undefined-variable errors, so a fresh clone still runs.
+github_token: "{{ vault_github_token | default('') }}"
+anthropic_api_key: "{{ vault_anthropic_api_key | default('') }}"
+openai_api_key: "{{ vault_openai_api_key | default('') }}"
+huggingface_token: "{{ vault_huggingface_token | default('') }}"
+tailscale_auth_key: "{{ vault_tailscale_auth_key | default('') }}"
+
+# --- Private repositories to restore -----------------------------------------
+# Repos cloned onto a fresh machine. dest is expanded relative to target_user's
+# home. Set "private: true" for repos that need github_token to clone.
+private_repos: []
+# private_repos:
+#   - name: dotfiles
+#     url: https://github.com/youruser/dotfiles.git
+#     dest: "{{ target_user_home }}/.dotfiles"
+#     version: main
+#     private: true

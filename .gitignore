@@ -17,3 +17,7 @@ wheels/
 
 # hosts
 hosts.ini
+
+# ansible vault password (never commit)
+.vault_pass
+*.retry

@@ -6,8 +6,22 @@ Fedora post installation steps automated with ansible.
 
 > [!NOTE]
 > If you don't need specific playbooks you can comment them out in the `playbook.yml` file.
+> Keep `playbook-preflight.yml` first: it resolves `target_user` and
+> `target_user_home`, which the devtools, agents and flatpaks playbooks use.
 
-The directort contains a set of ansible playbooks for setting up some preferred applications after setup.
+This directory contains a set of ansible playbooks for setting up some preferred
+applications after setup.
+
+## configuration
+
+Machine-specific settings live in `group_vars/all/`. See the
+[repository README](../README.md#configuration) for how `target_user`,
+secrets and private repositories are configured.
+
+```bash
+./secrets.sh init   # set up encrypted secrets
+./run.sh            # run everything
+```
 
 
 ## what's not covered
