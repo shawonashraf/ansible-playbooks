@@ -11,10 +11,6 @@
       dnf:
         name: steam-devices
         state: present
-    - name: Install Lutris
-      dnf:
-        name: lutris
-        state: present
     - name: Install MangoHud
       dnf:
         name: mangohud

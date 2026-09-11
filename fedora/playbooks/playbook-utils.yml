@@ -39,11 +39,6 @@
         name: wget
         state: present
 
-    - name: Install bottles
-      dnf:
-        name: bottles
-        state: present
-
     - name: Install btrfs-assistant
       dnf:
         name: btrfs-assistant
