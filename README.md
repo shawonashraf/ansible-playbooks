@@ -260,19 +260,3 @@ with no value in the vault is skipped rather than exported empty.
 Comment out any import you do not want in [`fedora/playbook.yml`](fedora/playbook.yml).
 Leave `playbook-preflight.yml` first: the other playbooks depend on the variables
 it resolves.
-
-## Layout
-
-```
-pyproject.toml / uv.lock   pinned Ansible
-CLAUDE.md                  conventions for AI agents working in this repo
-fedora/                    Fedora setup
-ubuntu/                    Ubuntu setup, same structure
-  ansible.cfg              inventory and output settings
-  inventory.ini            localhost, local connection
-  run.sh                   entry point
-  secrets.sh               manage the encrypted vault
-  playbook.yml             import list, preflight first
-  playbooks/               one playbook per concern
-  group_vars/all/          configuration and secrets
-```
