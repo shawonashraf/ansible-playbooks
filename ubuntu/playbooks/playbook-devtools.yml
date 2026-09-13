@@ -99,15 +99,9 @@
           - npm
         state: present
 
-    - name: Install corepack
-      command: npm i -g corepack
-
 - hosts: all
   become: false
   tasks:
-    - name: Enable corepack
-      command: corepack enable
-
     - name: Install Rust and Cargo
       shell: |
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y

@@ -22,12 +22,6 @@
       args:
         creates: "{{ target_user_home }}/.local/bin/claude"
 
-    - name: Install opencode
-      shell: |
-        curl -fsSL https://opencode.ai/install | bash
-      args:
-        creates: "{{ target_user_home }}/.opencode/bin/opencode"
-
     - name: Configure shell PATH for agent CLIs
       blockinfile:
         path: "{{ target_user_home }}/{{ item }}"

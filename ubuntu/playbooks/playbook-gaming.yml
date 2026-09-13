@@ -28,3 +28,7 @@
       apt:
         name: gamemode
         state: present
+    - name: Install goverlay
+      apt:
+        name: goverlay
+        state: present
