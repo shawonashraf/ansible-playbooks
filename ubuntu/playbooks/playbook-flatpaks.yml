@@ -33,7 +33,6 @@
       # A dnf package on Fedora; Ubuntu has no deb, flatpak is the
       # officially supported install there.
       - com.usebottles.bottles
-      - io.github.Faugus.faugus-launcher
 
   tasks:
     - name: Add Flathub remote for user
