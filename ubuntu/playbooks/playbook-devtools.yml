@@ -9,6 +9,7 @@
           - git
           - clang
           - llvm
+          - cmake
           - make
           - build-essential
           - curl
