@@ -1,0 +1,30 @@
+---
+- hosts: all
+  become: true
+
+  tasks:
+    - name: Add the Signal repository
+      # Signal ships a deb822 sources file pinned to the xenial suite; the
+      # suite name is intentional and works on any 64-bit Debian-based distro.
+      # signed_by points at the ASCII-armored key, which apt handles directly.
+      deb822_repository:
+        name: signal
+        types: deb
+        uris: https://updates.signal.org/desktop/apt
+        suites: xenial
+        components: main
+        architectures: amd64
+        signed_by: https://updates.signal.org/desktop/apt/keys.asc
+
+    - name: Install Signal
+      apt:
+        update_cache: true
+        name: signal-desktop
+        state: present
+
+    - name: Install Discord
+      # Discord does not publish an apt repository; the .deb is the only
+      # official channel and is reinstalled to update. The download URL
+      # redirects to the current release, which get_url follows.
+      apt:
+        deb: https://discord.com/api/download?platform=linux&format=deb
