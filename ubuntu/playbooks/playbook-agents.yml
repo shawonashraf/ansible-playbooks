@@ -22,6 +22,12 @@
       args:
         creates: "{{ target_user_home }}/.local/bin/claude"
 
+    - name: Install Mistral Vibe CLI
+      shell: |
+        curl -LsSf https://mistral.ai/vibe/install.sh | bash
+      args:
+        creates: "{{ target_user_home }}/.local/bin/vibe"
+
     - name: Configure shell PATH for agent CLIs
       blockinfile:
         path: "{{ target_user_home }}/{{ item }}"
