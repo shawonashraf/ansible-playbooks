@@ -14,7 +14,6 @@
   vars:
     flatpaks:
       - com.github.tchx84.Flatseal
-      - org.signal.Signal
       - com.obsproject.Studio
       - org.filezillaproject.Filezilla
       - io.podman_desktop.PodmanDesktop
