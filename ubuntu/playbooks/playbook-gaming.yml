@@ -32,3 +32,13 @@
       apt:
         name: goverlay
         state: present
+    - name: Enable i386 architecture for Faugus Launcher
+      command: dpkg --add-architecture i386
+    - name: Add Faugus Launcher PPA
+      apt_repository:
+        repo: ppa:faugus/faugus-launcher
+    - name: Install Faugus Launcher
+      apt:
+        name: faugus-launcher
+        state: present
+        update_cache: true
