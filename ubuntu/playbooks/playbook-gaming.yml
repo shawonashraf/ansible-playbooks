@@ -42,3 +42,22 @@
         name: faugus-launcher
         state: present
         update_cache: true
+    - name: Get the latest LACT release info
+      uri:
+        url: https://api.github.com/repos/ilya-zlobintsev/LACT/releases/latest
+        return_content: true
+        body_format: json
+      register: lact_release
+    - name: Find the LACT .deb URL for this Ubuntu version
+      set_fact:
+        lact_deb_url: "{{ item.browser_download_url }}"
+      loop: "{{ lact_release.json.assets }}"
+      when: item.name | regex_search('^lact-[0-9].*\.amd64\.ubuntu-' ~ (ansible_distribution_version | replace('.', '')) ~ '\.deb$')
+    - name: Download LACT .deb
+      get_url:
+        url: "{{ lact_deb_url }}"
+        dest: /tmp/lact.deb
+        mode: "0644"
+    - name: Install LACT
+      apt:
+        deb: /tmp/lact.deb
