@@ -1,12 +1,13 @@
 ---
 # Resolves and validates the configuration the other playbooks depend on.
 # Must run first: it sets target_user_home, which later plays use for paths.
-- hosts: all
+- name: Resolve and validate target configuration
+  hosts: all
   become: false
 
   tasks:
     - name: Check that target_user is set to something usable
-      assert:
+      ansible.builtin.assert:
         that:
           - target_user is defined
           - target_user | length > 0
@@ -17,35 +18,35 @@
         success_msg: "Configuring for user: {{ target_user }}"
 
     - name: Look up the account of target_user
-      getent:
+      ansible.builtin.getent:
         database: passwd
         key: "{{ target_user }}"
       register: target_user_passwd
       failed_when: false
 
     - name: Fail when target_user does not exist on this machine
-      fail:
+      ansible.builtin.fail:
         msg: >-
           No account named "{{ target_user }}" exists on this machine.
           Create it first, or correct target_user in group_vars/all/config.yml.
       when: target_user not in (getent_passwd | default({}))
 
     - name: Resolve the home directory of target_user
-      set_fact:
+      ansible.builtin.set_fact:
         target_user_home: "{{ target_user_home | default(getent_passwd[target_user][4], true) }}"
 
     - name: Check that the home directory exists
-      stat:
+      ansible.builtin.stat:
         path: "{{ target_user_home }}"
       register: target_user_home_stat
 
     - name: Fail when the home directory is missing
-      fail:
+      ansible.builtin.fail:
         msg: "Home directory {{ target_user_home }} for {{ target_user }} does not exist."
       when: not target_user_home_stat.stat.isdir | default(false)
 
     - name: Report the resolved configuration
-      debug:
+      ansible.builtin.debug:
         msg:
           - "target_user:      {{ target_user }}"
           - "target_user_home: {{ target_user_home }}"

@@ -1,40 +1,40 @@
 ---
-- hosts: all
+- name: Install utility packages
+  hosts: all
   become: true
   tasks:
     - name: Install htop, btop
-      apt:
+      ansible.builtin.apt:
         name:
           - htop
           - btop
         state: present
 
     - name: Install tree
-      apt:
+      ansible.builtin.apt:
         name: tree
         state: present
 
     - name: Install fastfetch
-      apt:
+      ansible.builtin.apt:
         name: fastfetch
         state: present
 
     - name: Install onefetch
       # Not in the Ubuntu archive (Fedora uses a copr for it); the project
       # ships an official .deb with its releases.
-      apt:
+      ansible.builtin.apt:
         deb: https://github.com/o2sh/onefetch/releases/latest/download/onefetch_amd64.deb
 
     - name: Install wget
-      apt:
+      ansible.builtin.apt:
         name: wget
         state: present
     - name: Install tmux
-      apt:
+      ansible.builtin.apt:
         name: tmux
         state: present
     - name: Install Okular
-      apt:
+      ansible.builtin.apt:
         name: okular
         state: present
-        

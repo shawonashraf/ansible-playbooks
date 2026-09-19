@@ -1,5 +1,6 @@
 ---
-- hosts: all
+- name: Install and configure web browsers
+  hosts: all
   become: true
 
   vars:
@@ -9,7 +10,7 @@
     - name: Require Ubuntu
       # The Snap removal step is Ubuntu-specific; the Mozilla apt repo works
       # on any Debian-based distro, but the snap guards below assume snapd.
-      assert:
+      ansible.builtin.assert:
         that:
           - ansible_facts['distribution'] == 'Ubuntu'
 
@@ -17,18 +18,18 @@
     - name: Install Google Chrome
       # The .deb registers Google's apt repository on install, so later
       # system updates keep Chrome current.
-      apt:
+      ansible.builtin.apt:
         deb: https://dl.google.com/linux/direct/google-chrome-stable_current_amd64.deb
 
     - name: Ensure prerequisites for the Mozilla key are installed
-      apt:
+      ansible.builtin.apt:
         name:
           - ca-certificates
           - gnupg
         state: present
 
     - name: Create APT keyring directory
-      file:
+      ansible.builtin.file:
         path: /etc/apt/keyrings
         state: directory
         owner: root
@@ -36,7 +37,7 @@
         mode: '0755'
 
     - name: Download Mozilla signing key over HTTPS
-      get_url:
+      ansible.builtin.get_url:
         url: https://packages.mozilla.org/apt/repo-signing-key.gpg
         dest: /etc/apt/keyrings/packages.mozilla.org.asc
         owner: root
@@ -44,7 +45,7 @@
         mode: '0644'
 
     - name: Read signing key fingerprint
-      command:
+      ansible.builtin.command:
         argv:
           - gpg
           - --batch
@@ -56,7 +57,7 @@
       when: not ansible_check_mode
 
     - name: Verify Mozilla signing key
-      assert:
+      ansible.builtin.assert:
         that:
           - "('fpr:::::::::' ~ mozilla_key_fingerprint ~ ':') in mozilla_key.stdout"
         fail_msg: Mozilla signing key fingerprint did not match; stopping.
@@ -65,7 +66,7 @@
     - name: Configure Mozilla Deb822 repository
       # signed_by points at the key whose fingerprint was verified above, so
       # the repo cannot be silently re-pointed at a different signing key.
-      deb822_repository:
+      ansible.builtin.deb822_repository:
         name: mozilla
         types: deb
         uris: https://packages.mozilla.org/apt
@@ -74,7 +75,7 @@
         signed_by: /etc/apt/keyrings/packages.mozilla.org.asc
 
     - name: Remove legacy Mozilla source file from the earlier setup
-      file:
+      ansible.builtin.file:
         path: /etc/apt/sources.list.d/mozilla.list
         state: absent
 
@@ -82,7 +83,7 @@
       # Pin-Priority 1001 lets apt downgrade from Ubuntu's higher 1: epoch to
       # the Mozilla build; -1 on the Ubuntu firefox package blocks the snap
       # transition package that would otherwise pull the snap back in.
-      copy:
+      ansible.builtin.copy:
         dest: /etc/apt/preferences.d/mozilla
         owner: root
         group: root
@@ -97,27 +98,28 @@
           Pin-Priority: -1
 
     - name: Refresh APT indexes
-      apt:
+      ansible.builtin.apt:
         update_cache: true
 
     - name: Install current Mozilla Firefox DEB
       # allow_downgrade handles Ubuntu's numerically higher 1: epoch so the
       # Mozilla build wins despite the pin. fail_on_autoremove keeps a failed
       # run from pulling in unrelated removals.
-      apt:
+      ansible.builtin.apt:
         name: firefox
         state: latest
         allow_downgrade: true
         force_apt_get: true
         fail_on_autoremove: true
+      # noqa: package-latest
 
     - name: Check whether Snap is available
-      stat:
+      ansible.builtin.stat:
         path: /usr/bin/snap
       register: snap_binary
 
     - name: List installed snaps
-      command:
+      ansible.builtin.command:
         argv: [/usr/bin/snap, list]
       environment:
         LC_ALL: C
@@ -129,7 +131,7 @@
     # No --purge: keep Snap's normal automatic removal snapshot so a profile
     # rollback stays possible.
     - name: Remove Firefox Snap if installed
-      command:
+      ansible.builtin.command:
         argv: [/usr/bin/snap, remove, firefox]
       changed_when: true
       when:
@@ -137,13 +139,13 @@
         - installed_snaps.stdout is search('(?m)^firefox\s')
 
     - name: Show installed Firefox version and APT candidate
-      command:
+      ansible.builtin.command:
         argv: [apt-cache, policy, firefox]
       register: firefox_policy
       changed_when: false
       when: not ansible_check_mode
 
     - name: Display installation result
-      debug:
+      ansible.builtin.debug:
         var: firefox_policy.stdout_lines
       when: not ansible_check_mode

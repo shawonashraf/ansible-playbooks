@@ -4,12 +4,13 @@
 # Runs last: it installs ~/.zshrc wholesale, which replaces the PATH blocks
 # playbook-devtools and playbook-agents add. The restored profile sets those
 # paths itself, so the ordering is deliberate rather than incidental.
-- hosts: all
+- name: Install shell profile dependencies
+  hosts: all
   become: true
 
   tasks:
     - name: Install packages the shell profile needs at startup
-      apt:
+      ansible.builtin.apt:
         name:
           - zsh
           - git
@@ -19,7 +20,8 @@
         state: present
       when: configs_repo.url | length > 0
 
-- hosts: all
+- name: Restore the zsh configuration
+  hosts: all
   become: true
   become_user: "{{ target_user }}"
 
@@ -35,7 +37,7 @@
 
   tasks:
     - name: Skip the shell setup when no configs repository is configured
-      debug:
+      ansible.builtin.debug:
         msg: "configs_repo.url is empty, skipping shell configuration."
       when: configs_repo.url | length == 0
 
@@ -44,13 +46,13 @@
       block:
 
         - name: Ensure the parent directory of the checkout exists
-          file:
+          ansible.builtin.file:
             path: "{{ configs_repo.dest | dirname }}"
             state: directory
             mode: "0755"
 
         - name: Clone the configs repository
-          git:
+          ansible.builtin.git:
             repo: "{{ configs_clone_url }}"
             dest: "{{ configs_repo.dest }}"
             version: "{{ configs_repo.version }}"
@@ -62,14 +64,15 @@
         - name: Strip the token from the stored remote URL
           # git writes the clone URL into .git/config verbatim, which would
           # leave the token readable on disk for the life of the checkout.
-          command: git remote set-url origin {{ configs_repo.url }}
+          ansible.builtin.command: git remote set-url origin {{ configs_repo.url }}
           args:
             chdir: "{{ configs_repo.dest }}"
           changed_when: false
           when: configs_clone_url != configs_repo.url
+          # noqa: command-instead-of-module
 
         - name: Check whether oh-my-zsh is already installed
-          stat:
+          ansible.builtin.stat:
             path: "{{ target_user_home }}/.oh-my-zsh"
           register: oh_my_zsh
 
@@ -81,7 +84,7 @@
           # --chsh is deliberately omitted: it shells out to chsh, which
           # prompts for a password under PAM and would hang the run. The
           # login shell is set with the user module below instead.
-          command: >-
+          ansible.builtin.command: >-
             ./setup.sh
             --os {{ configs_repo.profile }}
             {{ '' if configs_shell_sync else '--no-sync' }}
@@ -92,7 +95,7 @@
           changed_when: true
 
         - name: Read the shell profile from the checkout
-          slurp:
+          ansible.builtin.slurp:
             src: "{{ configs_shell_dir }}/zshrc-{{ configs_repo.profile }}"
           register: zshrc_source
 
@@ -100,7 +103,7 @@
           # Drops every "export NAME=" line for a name in shell_secrets, and
           # rewrites the opencode PATH entry, which the saved profile pins to
           # one user's home directory.
-          set_fact:
+          ansible.builtin.set_fact:
             zshrc_body: >-
               {{ zshrc_source['content'] | b64decode
                  | regex_replace('(?m)^[ \t]*export[ \t]+(' ~ (shell_secrets.keys() | join('|')) ~ ')=.*$', '')
@@ -108,7 +111,7 @@
           no_log: true
 
         - name: Write the credentials the profile expects
-          copy:
+          ansible.builtin.copy:
             content: |
               # Written by ansible from group_vars/all/vault.yml.
               # Not tracked in git. Sourced by ~/.zshrc.
@@ -120,7 +123,7 @@
           no_log: true
 
         - name: Install the shell profile
-          copy:
+          ansible.builtin.copy:
             content: |
               # Credentials live outside this file so it stays safe to commit.
               [ -f "$HOME/.secrets.env" ] && source "$HOME/.secrets.env"
@@ -131,19 +134,21 @@
             backup: true
           no_log: true
 
-- hosts: all
+- name: Set the login shell to zsh
+  hosts: all
   become: true
 
   tasks:
     - name: Locate the zsh binary
       # command -v is a shell builtin, so this needs the shell module.
-      shell: command -v zsh
+      ansible.builtin.shell: command -v zsh
       register: zsh_path
       changed_when: false
       when: configs_repo.url | length > 0
+      # noqa: command-instead-of-shell
 
     - name: Make zsh the login shell for {{ target_user }}
-      user:
+      ansible.builtin.user:
         name: "{{ target_user }}"
         shell: "{{ zsh_path.stdout }}"
       when: configs_repo.url | length > 0

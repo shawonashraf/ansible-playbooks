@@ -1,63 +1,71 @@
 ---
-- hosts: all
+- name: Install gaming software
+  hosts: all
   become: true
 
   tasks:
     - name: Install Steam
       # multiverse, enabled by the starter playbook.
-      apt:
+      ansible.builtin.apt:
         name: steam-installer
         state: present
     - name: Install Steam Devices
-      apt:
+      ansible.builtin.apt:
         name: steam-devices
         state: present
     - name: Install Lutris
-      apt:
+      ansible.builtin.apt:
         name: lutris
         state: present
     - name: Install MangoHud
-      apt:
+      ansible.builtin.apt:
         name: mangohud
         state: present
     - name: Install vkBasalt
-      apt:
+      ansible.builtin.apt:
         name: vkbasalt
         state: present
     - name: Install GameMode
-      apt:
+      ansible.builtin.apt:
         name: gamemode
         state: present
     - name: Install goverlay
-      apt:
+      ansible.builtin.apt:
         name: goverlay
         state: present
+    - name: Check enabled foreign architectures
+      ansible.builtin.command: dpkg --print-foreign-architectures
+      register: foreign_architectures
+      changed_when: false
+
     - name: Enable i386 architecture for Faugus Launcher
-      command: dpkg --add-architecture i386
+      ansible.builtin.command: dpkg --add-architecture i386
+      changed_when: true
+      when: "'i386' not in foreign_architectures.stdout_lines"
     - name: Add Faugus Launcher PPA
-      apt_repository:
+      ansible.builtin.apt_repository:
         repo: ppa:faugus/faugus-launcher
     - name: Install Faugus Launcher
-      apt:
+      ansible.builtin.apt:
         name: faugus-launcher
         state: present
         update_cache: true
     - name: Get the latest LACT release info
-      uri:
+      ansible.builtin.uri:
         url: https://api.github.com/repos/ilya-zlobintsev/LACT/releases/latest
         return_content: true
         body_format: json
       register: lact_release
     - name: Find the LACT .deb URL for this Ubuntu version
-      set_fact:
+      ansible.builtin.set_fact:
         lact_deb_url: "{{ item.browser_download_url }}"
       loop: "{{ lact_release.json.assets }}"
       when: item.name | regex_search('^lact-[0-9].*\.amd64\.ubuntu-' ~ (ansible_distribution_version | replace('.', '')) ~ '\.deb$')
     - name: Download LACT .deb
-      get_url:
+      ansible.builtin.get_url:
         url: "{{ lact_deb_url }}"
         dest: /tmp/lact.deb
         mode: "0644"
     - name: Install LACT
-      apt:
+      ansible.builtin.apt:
         deb: /tmp/lact.deb

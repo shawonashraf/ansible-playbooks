@@ -1,5 +1,6 @@
 ---
-- hosts: all
+- name: Install messaging applications
+  hosts: all
   become: true
 
   tasks:
@@ -7,7 +8,7 @@
       # Signal ships a deb822 sources file pinned to the xenial suite; the
       # suite name is intentional and works on any 64-bit Debian-based distro.
       # signed_by points at the ASCII-armored key, which apt handles directly.
-      deb822_repository:
+      ansible.builtin.deb822_repository:
         name: signal
         types: deb
         uris: https://updates.signal.org/desktop/apt
@@ -17,7 +18,7 @@
         signed_by: https://updates.signal.org/desktop/apt/keys.asc
 
     - name: Install Signal
-      apt:
+      ansible.builtin.apt:
         update_cache: true
         name: signal-desktop
         state: present
@@ -26,13 +27,13 @@
       # Discord does not publish an apt repository; the .deb is the only
       # official channel and is reinstalled to update. The download URL
       # redirects to the current release, which get_url follows.
-      apt:
+      ansible.builtin.apt:
         deb: https://discord.com/api/download?platform=linux&format=deb
 
     - name: Fetch the Slack download page
       # Slack exposes no "latest" redirect; the versioned .deb URL is embedded
       # in the JS-rendered instructions page, so fetch it and extract the link.
-      uri:
+      ansible.builtin.uri:
         url: https://slack.com/downloads/instructions/linux?ddl=1&build=deb
         method: GET
         return_content: true
@@ -41,9 +42,9 @@
     - name: Extract the Slack .deb URL
       # regex_search with no capture groups returns the first match as a
       # string, not a list, so it can be used directly as the deb URL.
-      set_fact:
-        slack_deb_url: "{{ slack_page.content | regex_search('https://[^\"'' ]+\\.deb', ignore_case=true) }}"
+      ansible.builtin.set_fact:
+        slack_deb_url: "{{ slack_page.content | regex_search('https://[^\"' ' ]+\\.deb', ignore_case=true) }}"
 
     - name: Install Slack
-      apt:
+      ansible.builtin.apt:
         deb: "{{ slack_deb_url }}"

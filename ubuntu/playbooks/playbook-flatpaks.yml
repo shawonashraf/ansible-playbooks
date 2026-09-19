@@ -1,14 +1,16 @@
 ---
 # Ubuntu ships snap, not flatpak, so the runtime has to be installed first.
-- hosts: all
+- name: Install the Flatpak runtime
+  hosts: all
   become: true
   tasks:
     - name: Install flatpak
-      apt:
+      ansible.builtin.apt:
         name: flatpak
         state: present
 
-- hosts: all
+- name: Install Flatpak applications
+  hosts: all
   become: true
   become_user: "{{ target_user }}"
   vars:
@@ -36,14 +38,14 @@
 
   tasks:
     - name: Add Flathub remote for user
-      flatpak_remote:
+      community.general.flatpak_remote:
         name: flathub
         state: present
         flatpakrepo_url: https://dl.flathub.org/repo/flathub.flatpakrepo
         method: user
 
     - name: Install Flatpak applications for user
-      flatpak:
+      community.general.flatpak:
         name: "{{ item }}"
         state: present
         remote: flathub
