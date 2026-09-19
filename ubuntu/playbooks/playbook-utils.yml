@@ -33,3 +33,8 @@
       apt:
         name: tmux
         state: present
+    - name: Install Okular
+      apt:
+        name: okular
+        state: present
+        
