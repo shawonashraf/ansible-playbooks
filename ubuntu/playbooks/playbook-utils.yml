@@ -29,3 +29,7 @@
       apt:
         name: wget
         state: present
+    - name: Install tmux
+      apt:
+        name: tmux
+        state: present
