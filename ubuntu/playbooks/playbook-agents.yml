@@ -34,6 +34,14 @@
         creates: "{{ target_user_home }}/.local/bin/vibe"
       # noqa: command-instead-of-module
 
+    - name: Install Codex
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -fsSL https://chatgpt.com/codex/install.sh | sh
+      args:
+        creates: "{{ target_user_home }}/.local/bin/codex"
+      # noqa: command-instead-of-module
+
     - name: Configure shell PATH for agent CLIs
       ansible.builtin.blockinfile:
         path: "{{ target_user_home }}/{{ item }}"
