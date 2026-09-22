@@ -161,46 +161,9 @@
       when: item.value | length > 0
 
     - name: Set up ssh commit signing
+      # The key itself is created by playbook-github, which runs earlier.
       when: git_signing.enabled
       block:
-
-        - name: Ensure ~/.ssh exists
-          file:
-            path: "{{ git_signing.key_path | dirname }}"
-            state: directory
-            mode: "0700"
-
-        - name: Install the signing key from the vault
-          copy:
-            content: "{{ ssh_signing_key | trim }}\n"
-            dest: "{{ git_signing.key_path }}"
-            mode: "0600"
-          when: ssh_signing_key | length > 0
-          no_log: true
-
-        - name: Generate a signing key when the vault has none
-          # -N '' leaves the key without a passphrase. A passphrase would make
-          # every commit prompt, since signing runs outside any ssh-agent here.
-          command: >-
-            ssh-keygen -t ed25519 -N '' -f {{ git_signing.key_path }}
-            -C "{{ git_user_email | default(target_user, true) }}"
-          args:
-            creates: "{{ git_signing.key_path }}"
-          when: ssh_signing_key | length == 0
-
-        - name: Derive the public key
-          # The vault stores only the private half, and ssh-keygen -Y sign
-          # needs the .pub beside it.
-          shell: >-
-            ssh-keygen -y -f {{ git_signing.key_path }}
-            > {{ git_signing.key_path }}.pub
-          args:
-            creates: "{{ git_signing.key_path }}.pub"
-
-        - name: Restrict the private key
-          file:
-            path: "{{ git_signing.key_path }}"
-            mode: "0600"
 
         - name: Read the public key
           slurp:
@@ -232,10 +195,10 @@
 
         - name: Show how to register the key with GitHub
           # Commits sign locally either way, but GitHub marks them Verified
-          # only once the public key is registered as a signing key. gh needs
-          # the admin:ssh_signing_key scope, which is not granted by default.
+          # only once the public key is registered as a signing key, which is
+          # separate from registering it for repository access.
           debug:
             msg:
-              - "Register this key with GitHub for commits to show as Verified:"
-              - "  gh ssh-key add {{ git_signing.key_path }}.pub --type signing --title {{ inventory_hostname }}"
+              - "For commits to show as Verified, add {{ git_signing.key_path }}.pub"
+              - "at https://github.com/settings/ssh/new with key type Signing Key:"
               - "{{ signing_pubkey.content | b64decode | trim }}"

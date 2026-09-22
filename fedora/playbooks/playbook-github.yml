@@ -1,0 +1,124 @@
+---
+# Sets up the ssh key the other playbooks use to reach GitHub and works out
+# whether GitHub accepts it yet. Must run right after playbook-preflight:
+# playbook-devtools signs commits with this key, and playbook-agents and
+# playbook-shell clone private repositories with it.
+#
+# The key comes from the vault (ssh_private_key) when one is provided, so one
+# identity carries across machines. Otherwise a passphrase-less ed25519 key is
+# generated here. A freshly generated key is unknown to GitHub, so the first
+# run prints it and the plays that need it skip; register it and rerun.
+- name: Install the ssh client
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Install openssh-clients
+      ansible.builtin.dnf:
+        name: openssh-clients
+        state: present
+
+- name: Set up the ssh key for GitHub
+  hosts: all
+  become: true
+  become_user: "{{ target_user }}"
+
+  vars:
+    known_hosts_file: "{{ ssh_key_path | dirname }}/known_hosts"
+
+  tasks:
+    - name: Ensure ~/.ssh exists
+      ansible.builtin.file:
+        path: "{{ ssh_key_path | dirname }}"
+        state: directory
+        mode: "0700"
+
+    - name: Install the private key from the vault
+      ansible.builtin.copy:
+        content: "{{ ssh_private_key | trim }}\n"
+        dest: "{{ ssh_key_path }}"
+        mode: "0600"
+      when: ssh_private_key | length > 0
+      no_log: true
+
+    - name: Generate a key when the vault has none
+      # -N '' leaves the key without a passphrase. Commit signing runs outside
+      # any ssh-agent here, so a passphrase would make every commit prompt.
+      ansible.builtin.command: >-
+        ssh-keygen -t ed25519 -N '' -f {{ ssh_key_path }}
+        -C "{{ git_user_email | default(target_user, true) }}"
+      args:
+        creates: "{{ ssh_key_path }}"
+      when: ssh_private_key | length == 0
+
+    - name: Restrict the private key
+      ansible.builtin.file:
+        path: "{{ ssh_key_path }}"
+        mode: "0600"
+
+    - name: Derive the public key
+      # The vault stores only the private half. Derived on every run rather
+      # than gated on creates:, so a key swapped in from the vault does not
+      # leave a stale .pub beside it.
+      ansible.builtin.command: ssh-keygen -y -f {{ ssh_key_path }}
+      register: ssh_pubkey
+      changed_when: false
+
+    - name: Write the public key
+      # ssh-keygen -Y sign needs the .pub next to the private key.
+      ansible.builtin.copy:
+        content: "{{ ssh_pubkey.stdout | trim }}\n"
+        dest: "{{ ssh_key_path }}.pub"
+        mode: "0644"
+
+    - name: Pin GitHub's host key
+      # The ed25519 key GitHub publishes at
+      # https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/githubs-ssh-key-fingerprints
+      # Pinning it keeps the first clone from prompting, and from trusting
+      # whatever answers on first use.
+      ansible.builtin.known_hosts:
+        name: github.com
+        key: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+        path: "{{ known_hosts_file }}"
+
+    - name: Check whether GitHub accepts the key
+      # GitHub offers no shell, so ssh -T exits 1 even on success and 255 when
+      # the key is rejected. The greeting on stderr is the reliable signal.
+      ansible.builtin.command: >-
+        ssh -T -o BatchMode=yes -o IdentitiesOnly=yes -o ConnectTimeout=15
+        -i {{ ssh_key_path }} -o UserKnownHostsFile={{ known_hosts_file }}
+        git@github.com
+      register: github_ssh_check
+      changed_when: false
+      failed_when: false
+
+    - name: Record whether GitHub access works
+      ansible.builtin.set_fact:
+        github_ssh_ok: "{{ 'successfully authenticated' in github_ssh_check.stderr }}"
+
+    - name: Work out which private-repository steps can run
+      # An ssh URL needs GitHub to accept the key. An https URL authenticates
+      # with github_token instead and is not gated here.
+      ansible.builtin.set_fact:
+        configs_repo_ready: >-
+          {{ configs_repo.url | length > 0
+             and (github_ssh_ok or configs_repo.url is not match('^(git@|ssh://)')) }}
+        claude_sync_ready: >-
+          {{ claude_sync.backup_repo | length > 0
+             and (github_ssh_ok or claude_sync.backup_repo is not match('^(git@|ssh://)')) }}
+
+    - name: Show the key GitHub needs to know about
+      ansible.builtin.debug:
+        msg:
+          - "GitHub does not accept {{ ssh_key_path }} yet. Add this public key at"
+          - "https://github.com/settings/ssh/new as an authentication key, and once more"
+          - "as a signing key so commits show as Verified:"
+          - "{{ ssh_pubkey.stdout | trim }}"
+          - "Steps that clone private repositories over ssh are skipped on this run."
+          - "Rerun once the key is registered."
+      when: not github_ssh_ok
+
+    - name: Confirm GitHub access
+      ansible.builtin.debug:
+        msg: "GitHub accepts {{ ssh_key_path }}: {{ github_ssh_check.stderr | trim }}"
+      when: github_ssh_ok

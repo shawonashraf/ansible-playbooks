@@ -19,6 +19,8 @@ target_user: "{{ lookup('env', 'SUDO_USER') | default(lookup('env', 'USER'), tru
 # Each maps a friendly name onto a vault_* value. The default('') fallback
 # makes vault.yml optional: without it these are empty strings rather than
 # undefined-variable errors, so a fresh clone still runs.
+# Only needed for private repositories given as https:// URLs. The defaults
+# below use ssh URLs, which authenticate with the ssh key instead.
 github_token: "{{ vault_github_token | default('') }}"
 anthropic_api_key: "{{ vault_anthropic_api_key | default('') }}"
 openai_api_key: "{{ vault_openai_api_key | default('') }}"
@@ -33,24 +35,29 @@ tailscale_auth_key: "{{ vault_tailscale_auth_key | default('') }}"
 git_user_name: "{{ vault_git_user_name | default('') }}"
 git_user_email: "{{ vault_git_user_email | default('') }}"
 
-# Private key used to sign commits. Optional: when empty, a passphrase-less
-# ed25519 key is generated on the machine instead. Vault it to keep one signing
-# identity across machines, so a single key registered on GitHub verifies them
-# all. The public half is derived from it, so it does not need storing.
-ssh_signing_key: "{{ vault_ssh_signing_key | default('') }}"
+# Private ssh key for GitHub: it authenticates the private-repository clones
+# and signs commits. Optional: when empty, playbook-github generates a
+# passphrase-less ed25519 key on the machine and prints it for you to
+# register. Vault it to keep one identity across machines, so a single key
+# registered on GitHub serves them all. The public half is derived from it.
+ssh_private_key: "{{ vault_ssh_private_key | default('') }}"
+
+# Where that key lives on the machine.
+ssh_key_path: "{{ target_user_home }}/.ssh/id_ed25519"
 
 # Signs every commit and tag with an ssh key, matching git's gpg.format=ssh.
 # Set enabled: false to leave git's signing settings alone.
 git_signing:
   enabled: true
-  key_path: "{{ target_user_home }}/.ssh/id_ed25519"
+  key_path: "{{ ssh_key_path }}"
 
 # --- Shell configuration ------------------------------------------------------
 # The repository holding your shell profiles. Point this at your own fork.
-# Cloned with github_token when the URL is a private https:// GitHub repo.
-# Set url to "" to skip playbook-shell entirely.
+# An ssh URL is cloned with the ssh key from playbook-github and is skipped
+# until GitHub accepts that key. An https URL of a private repository is
+# cloned with github_token instead. Set url to "" to skip playbook-shell.
 configs_repo:
-  url: "https://github.com/shawonashraf/configs.git"
+  url: "git@github.com:shawonashraf/configs.git"
   version: main
   dest: "{{ target_user_home }}/Projects/configs"
   # Selects shell/zshrc-<profile> from that repository. Deliberately "fedora"
@@ -71,10 +78,11 @@ shell_secrets:
 # --- Claude Code settings sync ------------------------------------------------
 # https://github.com/shawonashraf/claude-code-sync backs up skills, hooks,
 # agents, keybindings and a redacted settings.json to a git repository.
-# Point backup_repo at your own; set it to "" to skip. A private repository is
-# authenticated with github_token through the git credential store.
+# Point backup_repo at your own; set it to "" to skip. An ssh URL uses the
+# ssh key from playbook-github, so this is skipped until GitHub accepts it.
+# A private https URL goes through github_token via the git credential store.
 claude_sync:
-  backup_repo: "https://github.com/shawonashraf/claude-code-backup.git"
+  backup_repo: "git@github.com:shawonashraf/claude-code-backup.git"
   dest: "{{ target_user_home }}/Tools/claude-code-backup"
   # Installs the SessionEnd hook so every Claude Code session backs up on exit.
   install_hook: true

@@ -41,8 +41,19 @@
         msg: "configs_repo.url is empty, skipping shell configuration."
       when: configs_repo.url | length == 0
 
+    - name: Skip the shell setup while GitHub does not accept the ssh key
+      ansible.builtin.debug:
+        msg: >-
+          configs_repo.url is set but cannot be cloned yet: register the key
+          printed by playbook-github and rerun.
+      when:
+        - configs_repo.url | length > 0
+        - not (configs_repo_ready | default(false) | bool)
+
     - name: Set up the shell configuration
-      when: configs_repo.url | length > 0
+      # configs_repo_ready comes from playbook-github: the url is set and,
+      # for an ssh URL, GitHub accepts the key.
+      when: configs_repo_ready | default(false) | bool
       block:
 
         - name: Ensure the parent directory of the checkout exists
@@ -144,11 +155,13 @@
       ansible.builtin.shell: command -v zsh
       register: zsh_path
       changed_when: false
-      when: configs_repo.url | length > 0
+      # Only once the profile is in place: zsh without ~/.zshrc is a worse
+      # login shell than the bash the account started with.
+      when: configs_repo_ready | default(false) | bool
       # noqa: command-instead-of-shell
 
     - name: Make zsh the login shell for {{ target_user }}
       ansible.builtin.user:
         name: "{{ target_user }}"
         shell: "{{ zsh_path.stdout }}"
-      when: configs_repo.url | length > 0
+      when: configs_repo_ready | default(false) | bool

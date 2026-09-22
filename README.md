@@ -12,7 +12,25 @@ The repository pins its own Ansible version, so you do not need Ansible installe
 uv sync
 ```
 
-Then run it:
+### 1. Register an ssh key with GitHub
+
+Do this first. The playbooks reach GitHub over ssh only: the key signs your
+commits and clones your private configs and Claude Code backup repositories.
+No token is needed, and no vault. Create the key on the machine being set up
+and add it at <https://github.com/settings/ssh/new>, twice: once as an
+**authentication** key, once as a **signing** key.
+
+```bash
+ssh-keygen -t ed25519 -N '' -f ~/.ssh/id_ed25519
+cat ~/.ssh/id_ed25519.pub
+```
+
+The key must be passphrase-less: signing runs outside any ssh-agent, so a
+passphrase would make every commit prompt for it. If you skip this step the
+first run generates the key, prints it, and leaves the shell restore and the
+Claude Code sync for a second run once the key is registered.
+
+### 2. Run it
 
 ```bash
 cd fedora
@@ -22,12 +40,30 @@ cd fedora
 `run.sh` and `secrets.sh` use the pinned Ansible from `.venv` automatically, so
 there is no environment to activate. They fall back to whatever `ansible` is on
 your `PATH` if the virtualenv is missing. `run.sh` prompts for your sudo
-password, and for the vault password if you have set up secrets. Extra arguments
-are passed through to `ansible-playbook`:
+password, and for the vault password only if you have opted into the optional
+vault (see [Secrets](#secrets)). Extra arguments are passed through to
+`ansible-playbook`:
 
 ```bash
 ./run.sh --syntax-check
 ```
+
+The playbooks configure the machine they run on by default. To configure
+another machine over ssh instead, list it in a `hosts.ini` next to
+`inventory.ini` (the file is gitignored) and pass it through:
+
+```ini
+workstation ansible_user=you
+```
+
+```bash
+./run.sh -i hosts.ini
+```
+
+The sudo password prompt then applies to the remote account. `target_user`
+resolves on the machine running Ansible, so set it explicitly in `config.yml`
+when the remote account has a different name. Use a file rather than an
+ad-hoc `-i host,` list: the latter does not pick up `group_vars/`.
 
 ## Configuration
 
@@ -57,6 +93,11 @@ non-standard home paths work.
 exist on the machine.
 
 ### Secrets
+
+The vault is optional and most setups do not need it. GitHub access goes
+through the ssh key from step 1, so the vault only matters if you want API
+keys written into `~/.secrets.env`, a git identity set for you, or one ssh key
+shared across machines.
 
 Secrets are stored in an [ansible-vault](https://docs.ansible.com/ansible/latest/vault_guide/index.html)
 encrypted `vault.yml`, which **is** committed. That way your tokens travel with
@@ -120,9 +161,34 @@ Several things downstream depend on this: `claude-sync` commits your backups,
 and shell-sync commits your profile. Both fall back to a placeholder identity
 when git has none configured.
 
+### GitHub access
+
+`playbook-github.yml` runs right after preflight and owns the one ssh key the
+rest of the run relies on: `playbook-devtools.yml` signs commits with it, and
+`playbook-agents.yml` and `playbook-shell.yml` clone private repositories with
+it. No GitHub token is involved.
+
+The key comes from `vault_ssh_private_key` when you provide one, so the same
+identity carries across machines and one registered key serves them all. Only
+the private half is stored; the public key is derived from it. Leave it empty
+and a passphrase-less ed25519 key is generated on the machine instead. The key
+is written at mode `0600` into a `0700` `~/.ssh`, and GitHub's published host
+key is pinned in `known_hosts` so the first clone neither prompts nor trusts
+whatever answers.
+
+A passphrase-less key is deliberate. Signing here runs outside any ssh-agent,
+so a passphrase would make every commit prompt for it.
+
+A freshly generated key is unknown to GitHub, so the play checks whether
+`git@github.com` accepts it. When it does not, the play prints the public key
+and the steps that clone private repositories over ssh are skipped for that
+run. Add the key at <https://github.com/settings/ssh/new>, twice: once as an
+authentication key, once as a signing key, then rerun. Everything else installs
+on the first pass regardless.
+
 ### Commit signing
 
-`playbook-devtools.yml` configures git to sign every commit and tag with an ssh
+`playbook-devtools.yml` configures git to sign every commit and tag with that
 key, matching `gpg.format=ssh`:
 
 ```
@@ -133,15 +199,6 @@ tag.gpgsign                true
 gpg.ssh.allowedSignersFile ~/.ssh/allowed_signers
 ```
 
-The key comes from `vault_ssh_signing_key` when you provide one, so the same
-signing identity carries across machines and one registered key verifies them
-all. Only the private half is stored; the public key is derived from it. Leave
-it empty and a passphrase-less ed25519 key is generated on the machine instead.
-The key is written at mode `0600` into a `0700` `~/.ssh`.
-
-A passphrase-less key is deliberate. Signing here runs outside any ssh-agent,
-so a passphrase would make every commit prompt for it.
-
 The play also writes `~/.ssh/allowed_signers` from your `git_user_email`, which
 is what lets `git log --show-signature` verify your own commits instead of
 reporting them as signed by an unknown key.
@@ -149,14 +206,8 @@ reporting them as signed by an unknown key.
 > [!IMPORTANT]
 > Signing locally is not the same as GitHub showing commits as **Verified**.
 > The public key must also be registered as a *signing* key, which is a
-> different thing from an authentication key. The play prints the command:
->
-> ```bash
-> gh ssh-key add ~/.ssh/id_ed25519.pub --type signing --title fedora
-> ```
->
-> That needs the `admin:ssh_signing_key` scope, which `gh auth login` does not
-> grant by default.
+> different thing from an authentication key. Both are added on the same
+> settings page; pick the key type when adding it.
 
 Set `git_signing.enabled: false` to leave git's signing settings alone.
 
@@ -183,12 +234,18 @@ never included.
 
 ```yaml
 claude_sync:
-  backup_repo: "https://github.com/youruser/claude-code-backup.git"
+  backup_repo: "git@github.com:youruser/claude-code-backup.git"
   dest: "{{ target_user_home }}/Tools/claude-code-backup"
   install_hook: true
 ```
 
-Set `backup_repo: ""` to skip. The restore runs once, gated on the clone not
+Set `backup_repo: ""` to skip. An ssh URL is cloned with the key from
+`playbook-github.yml` and the whole sync is skipped until GitHub accepts that
+key. A private https URL is authenticated with `github_token` through git's
+credential store instead, because the backup is also pushed to and a token
+embedded in the remote URL could not be stripped afterwards.
+
+The restore runs once, gated on the clone not
 existing, because it overwrites `~/.claude` from the backup and re-running it
 would discard local changes made since. With `install_hook`, a `SessionEnd`
 hook is added so every Claude Code session backs itself up on exit.
@@ -212,20 +269,18 @@ Point it at your own repository in `config.yml`:
 
 ```yaml
 configs_repo:
-  url: "https://github.com/youruser/configs.git"
+  url: "git@github.com:youruser/configs.git"
   version: main
   dest: "{{ target_user_home }}/Projects/configs"
   profile: fedora     # selects shell/zshrc-fedora
 ```
 
-Set `url: ""` to skip the playbook entirely. A private repository is cloned
-using `github_token` from the vault; the token is stripped from the checkout's
-remote URL afterwards so it is not left readable in `.git/config`.
-
-> [!NOTE]
-> The Claude Code sync above authenticates differently, through git's
-> credential store, because it also has to *push*. Both read the same
-> `github_token`.
+Set `url: ""` to skip the playbook entirely. An ssh URL is cloned with the
+key from `playbook-github.yml`; until GitHub accepts that key the restore and
+the switch of the login shell are skipped, so you are never left with zsh as
+the login shell and no profile. A private https URL is cloned using
+`github_token` from the vault instead; the token is stripped from the
+checkout's remote URL afterwards so it is not left readable in `.git/config`.
 
 The repository is expected to provide a `setup.sh` and `shell/zshrc-<profile>`.
 `setup.sh` is run once, when `~/.oh-my-zsh` is missing, to install oh-my-zsh,
@@ -258,5 +313,5 @@ with no value in the vault is skipped rather than exported empty.
 ## Selecting playbooks
 
 Comment out any import you do not want in [`fedora/playbook.yml`](fedora/playbook.yml).
-Leave `playbook-preflight.yml` first: the other playbooks depend on the variables
-it resolves.
+Leave `playbook-preflight.yml` first and `playbook-github.yml` second: the other
+playbooks depend on the variables and the ssh key they set up.

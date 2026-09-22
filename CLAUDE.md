@@ -28,6 +28,7 @@ Note the repository depends on the full `ansible` distribution rather than
 fedora/
   ansible.cfg              # inventory + output config
   inventory.ini            # localhost, local connection
+  hosts.ini                # gitignored; optional remote target for run.sh -i
   run.sh                   # entry point; handles -K and vault flags
   secrets.sh               # init/edit/view/rekey the encrypted vault
   playbook.yml             # import list, preflight first
@@ -103,10 +104,12 @@ install; an ephemeral uvx environment lives in the uv cache, so `uv cache clean`
 would silently break the hook.
 
 `claude-sync` shells out to plain `git clone` and `git push` with no credential
-handling of its own, which is why the playbook writes `~/.git-credentials` at
-mode 0600 and sets `credential.helper store` rather than embedding the token in
-a remote URL. The backup repo is pushed to, so a URL-embedded token could not be
-stripped afterwards the way playbook-shell strips its own.
+handling of its own. With the default ssh URL that is the ssh key from
+playbook-github. For a private https URL the playbook writes
+`~/.git-credentials` at mode 0600 and sets `credential.helper store` rather
+than embedding the token in a remote URL: the backup repo is pushed to, so a
+URL-embedded token could not be stripped afterwards the way playbook-shell
+strips its own.
 
 `restore` is gated on the clone directory being absent. It overwrites `~/.claude`
 from the backup, so running it every pass would discard local changes. Note that
@@ -117,22 +120,54 @@ Never run `claude-sync restore` while testing on a development machine: it shell
 out to `claude plugin install` against the real `~/.claude`, regardless of
 `CLAUDE_SYNC_HOME`.
 
-## Commit signing (in playbook-devtools)
+## GitHub ssh key (in playbook-github)
+
+Everything that touches GitHub uses one ssh key at `ssh_key_path`; there is no
+token in the default flow. `playbook-github.yml` creates the key (from
+`vault_ssh_private_key`, or `ssh-keygen` when the vault has none), pins GitHub's
+host key, tests `ssh -T git@github.com`, and sets three facts the later plays
+read: `github_ssh_ok`, `configs_repo_ready` and `claude_sync_ready`. It must
+stay second in `playbook.yml`, right after preflight: devtools reads the `.pub`
+it writes, and `commit.gpgsign=true` is global, so a missing key would make
+*every* commit fail.
+
+Gate private-repository work on the `*_ready` facts, not on `github_ssh_ok`:
+the ready facts already allow https URLs through, which authenticate with
+`github_token` instead of the key. Use `| default(false) | bool` on them so a
+run with playbook-github commented out skips rather than errors.
+
+A freshly generated key is unknown to GitHub, so the first run is expected to
+skip the shell restore and the Claude Code sync and print the public key. That
+is the designed flow, not a failure: register the key, rerun. Never turn the
+skip into a `fail`.
 
 Generated keys use `ssh-keygen -N ''`. A passphrase would make every commit
 prompt, because git's `ssh-keygen -Y sign` runs with no agent here.
 
-The vault holds only the private key; the `.pub` is derived with
-`ssh-keygen -y` and gated on `creates:`. Do not add a separate vault entry for
-the public half — it would be one more thing to keep in step.
+The vault holds only the private key; the `.pub` is derived with `ssh-keygen -y`
+on every run so a key swapped in from the vault never leaves a stale `.pub`. Do
+not add a separate vault entry for the public half.
 
-`commit.gpgsign=true` is global, so any breakage in the key makes *every* commit
-fail, not just signed ones. Keep the key tasks ordered before the git_config
-tasks.
+Registering the key as a *signing* key on GitHub is separate from registering
+it for access and needs the `admin:ssh_signing_key` scope via `gh`, which a
+default `gh auth login` does not grant. The plays print instructions rather
+than attempting it.
 
-Registering a signing key on GitHub needs the `admin:ssh_signing_key` scope,
-which is distinct from `admin:public_key` and is not granted by a default
-`gh auth login`. The play prints instructions rather than attempting it.
+## sudo-rs (ubuntu only)
+
+Ubuntu 25.10+ ships sudo-rs as `/usr/bin/sudo`. It prints a custom `-p` prompt
+as `[sudo: <prompt>] Password:`, and Ansible's builtin sudo plugin only matches
+a line that starts with its prompt, so every `become: true` play fails with
+"Timeout waiting for privilege escalation prompt". `ubuntu/become_plugins/sudo.py`
+shadows the builtin through `become_plugins` in `ubuntu/ansible.cfg` and matches
+the prompt anywhere in the line. Keep that setting; do not work around it with
+`become_exe=/usr/bin/sudo.ws`, which only exists where classic sudo is also
+installed.
+The plugin copies the builtin's command builder rather than subclassing it:
+because it shadows `ansible.plugins.become.sudo`, importing the builtin by that
+name imports the plugin into itself. To check it is active, run an ad-hoc
+`ansible -b -m ping -e ansible_become_password=wrong`: "Incorrect sudo
+password" means the prompt was seen, a timeout means it was not.
 
 ## Verifying changes
 
@@ -150,3 +185,7 @@ values, and test it both with and without a `vault.yml` present. Delete the
 scratch file afterwards.
 
 `playbook-preflight.yml` itself needs Linux — it uses `getent`.
+
+To exercise a play against a real machine over ssh, put it in `hosts.ini` and
+pass `-i hosts.ini`. An ad-hoc `-i host,` inventory does not load `group_vars/`,
+so `target_user` comes back undefined and preflight fails on its first task.

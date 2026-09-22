@@ -2,6 +2,9 @@
 # playbook-preflight must stay first: it resolves target_user_home,
 # which the devtools, agents and flatpaks playbooks depend on.
 - import_playbook: playbooks/playbook-preflight.yml
+# playbook-github must stay second: it creates the ssh key that devtools
+# signs with, and works out whether agents and shell can clone over ssh.
+- import_playbook: playbooks/playbook-github.yml
 - import_playbook: playbooks/playbook-starter.yml
 - import_playbook: playbooks/playbook-utils.yml
 - import_playbook: playbooks/playbook-devtools.yml

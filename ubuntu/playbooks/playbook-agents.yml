@@ -71,8 +71,19 @@
     PATH: "{{ target_user_home }}/.local/bin:/usr/local/bin:/usr/bin:/bin"
 
   tasks:
+    - name: Skip the sync while GitHub does not accept the ssh key
+      ansible.builtin.debug:
+        msg: >-
+          claude_sync.backup_repo is set but cannot be cloned yet: register the
+          key printed by playbook-github and rerun.
+      when:
+        - claude_sync.backup_repo | length > 0
+        - not (claude_sync_ready | default(false) | bool)
+
     - name: Set up Claude Code settings sync
-      when: claude_sync.backup_repo | length > 0
+      # claude_sync_ready comes from playbook-github: the repo is set and,
+      # for an ssh URL, GitHub accepts the key.
+      when: claude_sync_ready | default(false) | bool
       block:
 
         - name: Authenticate git against GitHub for private repositories

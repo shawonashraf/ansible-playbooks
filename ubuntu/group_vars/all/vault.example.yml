@@ -17,12 +17,13 @@ vault_tailscale_auth_key: ""
 vault_git_user_name: ""
 vault_git_user_email: ""
 
-# Optional. Paste a passphrase-less ed25519 private key to reuse one signing
-# identity across machines; leave empty to generate a new key per machine.
+# Optional. Paste a passphrase-less ed25519 private key to reuse one GitHub
+# identity (repository access and commit signing) across machines; leave
+# empty to generate a new key per machine.
 # Must be a YAML block scalar so the newlines survive:
 #
-#   vault_ssh_signing_key: |
+#   vault_ssh_private_key: |
 #     -----BEGIN OPENSSH PRIVATE KEY-----
 #     ...
 #     -----END OPENSSH PRIVATE KEY-----
-vault_ssh_signing_key: ""
+vault_ssh_private_key: ""
