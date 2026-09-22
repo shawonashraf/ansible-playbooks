@@ -111,7 +111,6 @@
     - name: Install Rust and Cargo
       shell: |
         curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-        source $HOME/.cargo/env
       args:
         creates: "{{ target_user_home }}/.cargo/bin/rustc"
 

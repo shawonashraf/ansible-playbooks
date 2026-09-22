@@ -17,6 +17,12 @@
   hosts: all
   become: false
 
+  environment:
+    # The installers land in ~/.local/bin and check that it is on PATH; the
+    # Mistral Vibe one exits non-zero when it is not, even after a successful
+    # install. It also lets them reuse the uv playbook-devtools installed.
+    PATH: "{{ target_user_home }}/.local/bin:{{ ansible_env.PATH }}"
+
   tasks:
     - name: Install Claude Code
       ansible.builtin.shell: |
@@ -35,11 +41,15 @@
       # noqa: command-instead-of-module
 
     - name: Install Codex
+      # The installer asks "Start Codex now? [y/N]" on /dev/tty after
+      # installing, which hangs the run whenever the connection has a tty.
       ansible.builtin.shell: |
         set -o pipefail
         curl -fsSL https://chatgpt.com/codex/install.sh | sh
       args:
         creates: "{{ target_user_home }}/.local/bin/codex"
+      environment:
+        CODEX_NON_INTERACTIVE: "1"
       # noqa: command-instead-of-module
 
     - name: Configure shell PATH for agent CLIs

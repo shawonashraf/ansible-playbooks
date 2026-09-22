@@ -42,9 +42,18 @@
       ansible.builtin.command: dpkg --add-architecture i386
       changed_when: true
       when: "'i386' not in foreign_architectures.stdout_lines"
-    - name: Add Faugus Launcher PPA
-      ansible.builtin.apt_repository:
-        repo: ppa:faugus/faugus-launcher
+    - name: Add the Faugus Launcher PPA
+      # Not apt_repository with a ppa: URL. That fetches the signing key with
+      # gpg over hkp://keyserver.ubuntu.com:80, which fails intermittently as
+      # root ("Unable to get required signing key"). Fetching the same key over
+      # https is deterministic, and deb822 matches the Docker repository above.
+      ansible.builtin.deb822_repository:
+        name: faugus-launcher
+        types: deb
+        uris: https://ppa.launchpadcontent.net/faugus/faugus-launcher/ubuntu
+        suites: "{{ ansible_distribution_release }}"
+        components: main
+        signed_by: https://keyserver.ubuntu.com/pks/lookup?op=get&options=mr&search=0xD474509DB0E425738668F533BFC9511135B3C874
     - name: Install Faugus Launcher
       ansible.builtin.apt:
         name: faugus-launcher
@@ -57,15 +66,25 @@
         body_format: json
       register: lact_release
     - name: Find the LACT .deb URL for this Ubuntu version
+      # "is match", not "| regex_search": the filter returns None on a miss,
+      # which ansible-core 2.19+ rejects as a non-boolean conditional.
       ansible.builtin.set_fact:
         lact_deb_url: "{{ item.browser_download_url }}"
       loop: "{{ lact_release.json.assets }}"
-      when: item.name | regex_search('^lact-[0-9].*\.amd64\.ubuntu-' ~ (ansible_distribution_version | replace('.', '')) ~ '\.deb$')
+      loop_control:
+        label: "{{ item.name }}"
+      when: item.name is match('^lact-[0-9].*\.amd64\.ubuntu-' ~ (ansible_distribution_version | replace('.', '')) ~ '\.deb$')
+    - name: Skip LACT when the release has no build for this Ubuntu version
+      ansible.builtin.debug:
+        msg: "No LACT .deb for Ubuntu {{ ansible_distribution_version }} in {{ lact_release.json.tag_name }}, skipping."
+      when: lact_deb_url is not defined
     - name: Download LACT .deb
       ansible.builtin.get_url:
         url: "{{ lact_deb_url }}"
         dest: /tmp/lact.deb
         mode: "0644"
+      when: lact_deb_url is defined
     - name: Install LACT
       ansible.builtin.apt:
         deb: /tmp/lact.deb
+      when: lact_deb_url is defined
