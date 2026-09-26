@@ -21,7 +21,7 @@
     # The installers land in ~/.local/bin and check that it is on PATH; the
     # Mistral Vibe one exits non-zero when it is not, even after a successful
     # install. It also lets them reuse the uv playbook-devtools installed.
-    PATH: "{{ target_user_home }}/.local/bin:{{ ansible_env.PATH }}"
+    PATH: "{{ target_user_home }}/.local/bin:{{ target_user_home }}/.opencode/bin:{{ ansible_env.PATH }}"
 
   tasks:
     - name: Install Claude Code
@@ -50,6 +50,14 @@
         creates: "{{ target_user_home }}/.local/bin/codex"
       environment:
         CODEX_NON_INTERACTIVE: "1"
+      # noqa: command-instead-of-module
+
+    - name: Install OpenCode
+      ansible.builtin.shell: |
+        set -o pipefail
+        curl -fsSL https://opencode.ai/v2/install | bash
+      args:
+        creates: "{{ target_user_home }}/.opencode/bin/opencode"
       # noqa: command-instead-of-module
 
     - name: Configure shell PATH for agent CLIs
