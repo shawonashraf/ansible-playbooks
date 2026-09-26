@@ -27,3 +27,38 @@
           - handbrake
           - handbrake-cli
         state: present
+
+    - name: Install EasyEffects
+      # PipeWire-based audio effects app. Presets are installed for the user
+      # in the play below, into ~/.config/easyeffects.
+      ansible.builtin.apt:
+        name: easyeffects
+        state: present
+
+- name: Install EasyEffects presets for the user
+  # Runs the upstream install.sh from JackHack96/EasyEffects-Presets, which
+  # detects the preset directory and downloads the files. Runs as target_user
+  # because the presets land in that user's ~/.config/easyeffects.
+  hosts: all
+  become: true
+  become_user: "{{ target_user }}"
+
+  tasks:
+    - name: Install EasyEffects presets
+      # Feeds "1" to the installer's menu: "Install all presets". The script
+      # requires curl, which playbook-shell installs; this play does not run
+      # until after it, so curl is guaranteed present.
+      #
+      # HOME is set explicitly because install.sh derives the preset directory
+      # from $HOME; under become_user Ansible does not guarantee $HOME points
+      # at target_user's home, so leaving it to the shell would risk writing
+      # presets to the wrong place.
+      ansible.builtin.shell: >-
+        set -o pipefail;
+        echo 1 | bash -c "$(curl -fsSL
+        https://raw.githubusercontent.com/JackHack96/EasyEffects-Presets/master/install.sh)"
+      args:
+        creates: "{{ target_user_home }}/.config/easyeffects/output/Perfect EQ.json"
+        executable: /bin/bash
+      environment:
+        HOME: "{{ target_user_home }}"
