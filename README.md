@@ -315,3 +315,73 @@ with no value in the vault is skipped rather than exported empty.
 Comment out any import you do not want in [`fedora/playbook.yml`](fedora/playbook.yml).
 Leave `playbook-preflight.yml` first and `playbook-github.yml` second: the other
 playbooks depend on the variables and the ssh key they set up.
+
+## Debugging in a Vagrant VM
+
+The playbooks normally configure the machine they run on, which makes them
+awkward to iterate on: a broken task can leave your workstation half-configured.
+[`vagrant/`](vagrant/) builds a disposable Ubuntu VM to run them against
+instead — currently wired to the `ubuntu/` playbooks, since that is the
+environment it mirrors.
+
+One-time host setup, for the libvirt provider:
+
+```bash
+sudo apt install -y libvirt-daemon-system qemu-system-x86 libvirt-dev
+sudo usermod -aG libvirt,kvm "$USER"        # takes effect at the next login
+curl -LO https://releases.hashicorp.com/vagrant/2.4.9/vagrant_2.4.9-1_amd64.deb
+sudo apt install ./vagrant_2.4.9-1_amd64.deb
+vagrant plugin install vagrant-libvirt
+```
+
+Then the debug loop:
+
+```bash
+cd vagrant
+vagrant up                                 # boot the VM and bootstrap it
+./debug.sh playbooks/playbook-media.yml     # one playbook, path relative to ubuntu/
+./debug.sh                                  # the full run, like ubuntu/run.sh
+vagrant destroy && vagrant up               # throw the machine away and start over
+```
+
+`debug.sh` builds a throwaway inventory from `vagrant ssh-config`, so the
+VM's address and key always match the running machine, and runs the Ansible
+pinned by this repository from `ubuntu/`, so `ansible.cfg` and `group_vars`
+apply as in a normal run. Extra arguments pass through to `ansible-playbook`,
+including vault flags when `vault.yml` exists:
+
+```bash
+./debug.sh playbooks/playbook-media.yml --syntax-check
+./debug.sh --ask-vault-pass
+```
+
+Two variables a normal run resolves that a standalone playbook cannot:
+
+- `target_user` defaults to the account running Ansible, which in the VM
+  would resolve to your host account — an account that does not exist there.
+  `debug.sh` passes `-e target_user=vagrant`; set `TARGET_USER` to debug a
+  different account (created by the bootstrap with passwordless sudo, so no
+  `-K` is needed).
+- `target_user_home` is set by `playbook-preflight.yml`, which never runs
+  when you target a single playbook. `debug.sh` provides it as
+  `/home/$TARGET_USER`; point `TARGET_USER_HOME` at the real path for
+  accounts with a non-standard home. In the full run the extra variable has
+  the same precedence as preflight's, so set it there too.
+
+The VM itself is configured through environment variables on `vagrant up`:
+
+| Variable | Default | Controls |
+|---|---|---|
+| `BOX` | `bento/ubuntu-24.04` | The base box; override to test another release |
+| `TARGET_USER` | `vagrant` | The account the playbooks configure |
+| `VM_CPUS` | `4` | VM CPUs |
+| `VM_MEMORY` | `8192` | VM memory in MB |
+
+> [!NOTE]
+> Until your next login, shells started from an existing desktop session do
+> not carry the `libvirt` group. Until then, prefix Vagrant's daemon-touching
+> commands (`up`, `halt`, `destroy`, `ssh`) with `sudo -u "$USER"` — sudo
+> re-reads `/etc/group`, so the group is already visible to it. `debug.sh`
+> itself keeps working in that state: when it cannot reach libvirt it reuses
+> the ssh config from the last successful run, since the VM's address does
+> not change while it runs.

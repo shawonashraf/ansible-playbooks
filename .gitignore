@@ -11,6 +11,8 @@ wheels/
 
 # vagrant
 .vagrant/
+vagrant/inventory.ini
+vagrant/.vagrant-ssh-config
 
 # vscode
 .vscode/

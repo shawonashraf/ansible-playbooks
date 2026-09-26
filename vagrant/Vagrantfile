@@ -1,0 +1,37 @@
+# Vagrant VM for debugging the playbooks in ubuntu/ without touching this
+# machine.
+#
+#   vagrant up                                  # build the VM (libvirt or virtualbox)
+#   ./debug.sh playbooks/playbook-media.yml     # run one playbook against it
+#   ./debug.sh                                  # the full run, like ubuntu/run.sh
+#   vagrant destroy && vagrant up               # start from a fresh machine
+#
+# The VM has a non-root user with passwordless sudo (bootstrap.sh), so the
+# become plays need no -K. debug.sh points the Ansible pinned by this
+# repository at the VM and overrides target_user, the one setting that
+# otherwise resolves from this machine's environment.
+Vagrant.configure("2") do |config|
+  # bento keeps boxes current for both libvirt and virtualbox. Override to
+  # debug against another release, e.g. BOX=bento/ubuntu-25.10.
+  config.vm.box = ENV.fetch("BOX", "bento/ubuntu-24.04")
+  config.vm.hostname = "playbook-dev"
+
+  # The account the playbooks configure: group_vars/all/config.yml's
+  # target_user. bootstrap.sh creates it with passwordless sudo when it is
+  # not the VM's own login user. debug.sh passes the same value to Ansible.
+  target_user = ENV.fetch("TARGET_USER", "vagrant")
+
+  config.vm.provision "shell",
+                      path: "bootstrap.sh",
+                      env: {"TARGET_USER" => target_user}
+
+  config.vm.provider :libvirt do |lv|
+    lv.cpus = Integer(ENV.fetch("VM_CPUS", "4"))
+    lv.memory = ENV.fetch("VM_MEMORY", "8192")
+  end
+
+  config.vm.provider :virtualbox do |vb|
+    vb.cpus = Integer(ENV.fetch("VM_CPUS", "4"))
+    vb.memory = ENV.fetch("VM_MEMORY", "8192")
+  end
+end
