@@ -13,7 +13,8 @@
 - import_playbook: playbooks/playbook-media.yml
 - import_playbook: playbooks/playbook-browsers.yml
 - import_playbook: playbooks/playbook-messaging.yml
-- import_playbook: playbooks/playbook-gaming.yml
+# not installing the gaming apps by default for now
+# - import_playbook: playbooks/playbook-gaming.yml
 - import_playbook: playbooks/playbook-agents.yml
 # Last on purpose: it replaces ~/.zshrc, including the PATH blocks the
 # devtools and agents playbooks write into it.
