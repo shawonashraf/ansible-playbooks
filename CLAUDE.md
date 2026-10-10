@@ -1,20 +1,24 @@
 # CLAUDE.md
 
-Ansible playbooks that configure a freshly installed machine. `fedora/` is the
-only live target; the repository is designed to be shareable, so nothing may be
+Ansible playbooks that configure a freshly installed machine. `ubuntu/` and
+`fedora/` are parallel trees with the same layout, scripts and `group_vars`
+contract; `ubuntu/` (targeting 26.04) is the one actively developed and the one
+the Vagrant VM mirrors, `fedora/` is kept in step where a change is not
+distro-specific. The repository is designed to be shareable, so nothing may be
 hardcoded to a single user or machine.
 
 ## Environment
 
-Ansible is pinned in this repository — do not rely on a global install.
+Ansible and ansible-lint are pinned in this repository — do not rely on a
+global install.
 
 ```bash
 uv sync   # create/refresh .venv
 ```
 
-`fedora/run.sh` and `fedora/secrets.sh` resolve Ansible from `../.venv/bin`
-first and fall back to `PATH`, so they work without activating anything. Keep
-that resolution in place when editing either script.
+`run.sh`, `secrets.sh` and `vagrant/debug.sh` resolve Ansible from
+`../.venv/bin` first and fall back to `PATH`, so they work without activating
+anything. Keep that resolution in place when editing any of them.
 
 Use `uv add` / `uv remove` for dependency changes, never `pip`.
 
@@ -25,8 +29,9 @@ Note the repository depends on the full `ansible` distribution rather than
 ## Layout
 
 ```
-fedora/
-  ansible.cfg              # inventory + output config
+ubuntu/                    # same layout under fedora/
+  ansible.cfg              # inventory + output config; ubuntu adds become_plugins
+  become_plugins/sudo.py   # ubuntu only, see sudo-rs below
   inventory.ini            # localhost, local connection
   hosts.ini                # gitignored; optional remote target for run.sh -i
   run.sh                   # entry point; handles -K and vault flags
@@ -37,7 +42,22 @@ fedora/
     config.yml             # committed plaintext config
     vault.yml              # committed ANSIBLE-VAULT ENCRYPTED (optional)
     vault.example.yml      # committed plaintext template
+vagrant/
+  Vagrantfile              # disposable Ubuntu VM (libvirt or virtualbox)
+  bootstrap.sh             # python3 + TARGET_USER with passwordless sudo
+  debug.sh                 # runs ubuntu/ playbooks against the VM
+.githooks/pre-commit       # rejects plaintext vault*.yml; opt-in per clone
 ```
+
+The playbook sets differ: ubuntu has `playbook-messaging` and
+`playbook-zotero`, fedora has `playbook-creative`, `playbook-openbangla` and
+`playbook-tailscale`. A fix to a shared playbook usually belongs in both trees;
+check the other one before calling it done.
+
+Ordering constraints in `ubuntu/playbook.yml` beyond preflight and github:
+`playbook-zotero` must come after `playbook-utils` (its setup script needs
+wget), `playbook-flatpaks` is commented out because flatpaks installed via
+Ansible do not get desktop icons, and `playbook-gaming` is off by default.
 
 ## Rules for changing playbooks
 
@@ -62,6 +82,10 @@ Any task consuming a secret should skip or degrade when the value is empty
 rather than fail.
 
 **Never log a secret.** Set `no_log: true` on tasks that receive one.
+
+**`configs_repo.profile` is deliberately `fedora` in `ubuntu/config.yml`.** The
+configs repository has no `zshrc-ubuntu`, and the value only selects that file;
+nothing OS-specific runs from it. Do not "fix" it to `ubuntu`.
 
 ## Secrets handling
 
@@ -155,8 +179,9 @@ than attempting it.
 
 ## sudo-rs (ubuntu only)
 
-Ubuntu 25.10+ ships sudo-rs as `/usr/bin/sudo`. It prints a custom `-p` prompt
-as `[sudo: <prompt>] Password:`, and Ansible's builtin sudo plugin only matches
+Ubuntu 25.10+ (so the 26.04 target) ships sudo-rs as `/usr/bin/sudo`. It
+prints a custom `-p` prompt as `[sudo: <prompt>] Password:`, and Ansible's
+builtin sudo plugin only matches
 a line that starts with its prompt, so every `become: true` play fails with
 "Timeout waiting for privilege escalation prompt". `ubuntu/become_plugins/sudo.py`
 shadows the builtin through `become_plugins` in `ubuntu/ansible.cfg` and matches
@@ -171,21 +196,46 @@ password" means the prompt was seen, a timeout means it was not.
 
 ## Verifying changes
 
-The playbooks target Fedora and cannot be fully run on macOS. What does work
-anywhere:
+Never run the playbooks against the development machine to test them; a
+broken task leaves it half-configured. Cheap checks that run anywhere:
 
 ```bash
-cd fedora
+cd ubuntu   # or fedora
 ../.venv/bin/ansible-playbook --syntax-check playbook.yml
+../.venv/bin/ansible-lint playbooks/playbook-foo.yml
 ```
 
 To check that variables resolve, run a scratch playbook with `gather_facts:
-false` from inside `fedora/` (so `group_vars/` is picked up) that debugs the
+false` from inside `ubuntu/` (so `group_vars/` is picked up) that debugs the
 values, and test it both with and without a `vault.yml` present. Delete the
 scratch file afterwards.
 
-`playbook-preflight.yml` itself needs Linux — it uses `getent`.
+The real test is the Vagrant VM, which is wired to `ubuntu/` only. See the
+README for host setup (libvirt, vagrant-libvirt).
 
-To exercise a play against a real machine over ssh, put it in `hosts.ini` and
-pass `-i hosts.ini`. An ad-hoc `-i host,` inventory does not load `group_vars/`,
-so `target_user` comes back undefined and preflight fails on its first task.
+```bash
+cd vagrant
+vagrant up
+./debug.sh playbooks/playbook-media.yml   # one playbook, path relative to ubuntu/
+./debug.sh                                # full run, like ubuntu/run.sh
+vagrant destroy && vagrant up             # fresh machine
+```
+
+`debug.sh` regenerates `vagrant/inventory.ini` and `.vagrant-ssh-config` from
+`vagrant ssh-config` (both gitignored), runs from inside `ubuntu/` so
+`ansible.cfg` and `group_vars/` apply, and passes `-e target_user=vagrant` and
+`-e target_user_home=/home/vagrant`. Those overrides exist because
+`config.yml` resolves `target_user` from the controller's environment (your
+host account, absent in the VM) and `target_user_home` only exists when
+preflight runs. The VM user has passwordless sudo, so no `-K`. Extra arguments
+pass through to `ansible-playbook`, including `--ask-vault-pass`. When
+`vagrant ssh-config` fails because the shell lacks the `libvirt` group,
+`debug.sh` reuses the previous ssh config rather than aborting.
+
+Do not let `claude-sync restore` run in a context that reaches the real
+`~/.claude` (see the Claude Code sync section); inside the VM it is fine.
+
+To exercise a play against another real machine over ssh, put it in `hosts.ini`
+and pass `-i hosts.ini`. An ad-hoc `-i host,` inventory does not load
+`group_vars/`, so `target_user` comes back undefined and preflight fails on its
+first task.
