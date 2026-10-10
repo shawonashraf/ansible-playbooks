@@ -7,6 +7,8 @@
 - import_playbook: playbooks/playbook-github.yml
 - import_playbook: playbooks/playbook-starter.yml
 - import_playbook: playbooks/playbook-utils.yml
+# Must come after playbook-utils: the zotero-pkg setup script needs wget.
+- import_playbook: playbooks/playbook-zotero.yml
 - import_playbook: playbooks/playbook-devtools.yml
 # For some reason desktop icons don't show up if installed via ansible
 # - import_playbook: playbooks/playbook-flatpaks.yml
