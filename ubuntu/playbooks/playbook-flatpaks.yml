@@ -29,9 +29,6 @@
       - io.github.getnf.embellish
       - io.github.ronniedroid.concessio
       - re.sonny.Eloquent
-      - net.davidotek.pupgui2
-      - com.github.Matoking.protontricks
-      - com.heroicgameslauncher.hgl
       # A dnf package on Fedora; Ubuntu has no deb, flatpak is the
       # officially supported install there.
       - com.usebottles.bottles
