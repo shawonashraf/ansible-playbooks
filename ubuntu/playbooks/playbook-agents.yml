@@ -52,14 +52,6 @@
         CODEX_NON_INTERACTIVE: "1"
       # noqa: command-instead-of-module
 
-    - name: Install OpenCode
-      ansible.builtin.shell: |
-        set -o pipefail
-        curl -fsSL https://opencode.ai/v2/install | bash
-      args:
-        creates: "{{ target_user_home }}/.opencode/bin/opencode"
-      # noqa: command-instead-of-module
-
     - name: Configure shell PATH for agent CLIs
       ansible.builtin.blockinfile:
         path: "{{ target_user_home }}/{{ item }}"
