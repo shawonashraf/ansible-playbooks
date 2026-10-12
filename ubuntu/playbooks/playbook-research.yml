@@ -1,0 +1,57 @@
+---
+# Zotero is not in the Ubuntu archive; this uses the third-party apt
+# repository from retorquere/zotero-pkg, which repackages the official
+# Zotero builds for Debian/Ubuntu.
+- name: Set up the Zotero apt repository
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Run the zotero-pkg repository setup script
+      # Installs the signing key into /usr/share/keyrings and writes the
+      # repo definition; `creates` keeps the script from re-running once
+      # the repo is in place. Needs wget, which playbook-utils installs.
+      ansible.builtin.shell: |
+        set -o pipefail
+        wget -qO- https://raw.githubusercontent.com/retorquere/zotero-pkg/master/install.sh | bash
+      args:
+        creates: /etc/apt/sources.list.d/zotero.list
+      # noqa: command-instead-of-module
+
+    - name: Install Zotero
+      # update_cache: true covers the `apt update` the new repository
+      # needs before the package is visible.
+      ansible.builtin.apt:
+        name: zotero
+        state: present
+        update_cache: true
+
+# Obsidian is not in the Ubuntu archive; the .deb from obsidian.md/download
+# is the official channel. That page links to a version-pinned GitHub
+# release asset, so the URL changes with every release and cannot be
+# hardcoded; resolve it through the GitHub API instead.
+- name: Install Obsidian from the upstream .deb
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Get the latest Obsidian release info
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest
+        return_content: true
+        body_format: json
+      register: obsidian_release
+
+    - name: Extract the Obsidian amd64 .deb URL
+      # The release carries amd64 and arm64 debs alongside AppImage and
+      # snap builds; take the amd64 deb, the asset the download page links.
+      ansible.builtin.set_fact:
+        obsidian_deb_url: "{{ obsidian_release.json.assets | selectattr('name', 'search', 'amd64\\.deb$') | map(attribute='browser_download_url') | first }}"
+
+    - name: Install Obsidian
+      # The .deb has no repository behind it, so it is downloaded on
+      # every run; apt is a no-op when the installed version matches,
+      # and a newer release upgrades it. Same trade-off as Discord and
+      # Slack in playbook-messaging.
+      ansible.builtin.apt:
+        deb: "{{ obsidian_deb_url }}"
