@@ -4,9 +4,19 @@
 # passwordless sudo so the become plays run without -K.
 set -euo pipefail
 
-export DEBIAN_FRONTEND=noninteractive
-apt-get update
-apt-get install -y python3 curl ca-certificates
+if command -v apt-get >/dev/null; then
+  export DEBIAN_FRONTEND=noninteractive
+  apt-get update
+  apt-get install -y python3 curl ca-certificates
+else
+  # The Fedora box is the Cloud edition, not Workstation. Add what a stock
+  # Workstation install already has and the playbooks assume: python3-libdnf5
+  # for Ansible's dnf module, flatpak for playbook-flatpaks, and the
+  # third-party repo definitions (disabled, as on Workstation) that hold
+  # google-chrome for playbook-browsers.
+  dnf install -y python3 python3-libdnf5 curl ca-certificates \
+    flatpak fedora-workstation-repositories
+fi
 
 user="${TARGET_USER:-vagrant}"
 if ! id "$user" >/dev/null 2>&1; then

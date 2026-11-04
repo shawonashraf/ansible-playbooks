@@ -2,8 +2,7 @@
 
 Ansible playbooks that configure a freshly installed machine. `ubuntu/` and
 `fedora/` are parallel trees with the same layout, scripts and `group_vars`
-contract; `ubuntu/` (targeting 26.04) is the one actively developed and the one
-the Vagrant VM mirrors, `fedora/` is kept in step where a change is not
+contract; `ubuntu/` (targeting 26.04) is the one actively developed, `fedora/` is kept in step where a change is not
 distro-specific. The repository is designed to be shareable, so nothing may be
 hardcoded to a single user or machine.
 
@@ -43,19 +42,21 @@ ubuntu/                    # same layout under fedora/
     vault.yml              # committed ANSIBLE-VAULT ENCRYPTED (optional)
     vault.example.yml      # committed plaintext template
 vagrant/
-  Vagrantfile              # disposable Ubuntu VM (libvirt or virtualbox)
+  Vagrantfile              # disposable Ubuntu and Fedora VMs (libvirt or virtualbox)
   bootstrap.sh             # python3 + TARGET_USER with passwordless sudo
-  debug.sh                 # runs ubuntu/ playbooks against the VM
+  debug.sh                 # runs ubuntu/ (or DISTRO=fedora) playbooks against a VM
 .githooks/pre-commit       # rejects plaintext vault*.yml; opt-in per clone
 ```
 
-The playbook sets differ: ubuntu has `playbook-messaging` and
-`playbook-zotero`, fedora has `playbook-creative`, `playbook-openbangla` and
-`playbook-tailscale`. A fix to a shared playbook usually belongs in both trees;
+The playbook sets differ: ubuntu has `playbook-messaging`,
+`playbook-research` (Zotero, Obsidian) and `playbook-gaming`; fedora installs
+the messaging and research apps as flatpaks instead, and has no gaming
+playbook. Fedora alone has `playbook-tailscale`, which is not imported. A fix
+to a shared playbook usually belongs in both trees;
 check the other one before calling it done.
 
 Ordering constraints in `ubuntu/playbook.yml` beyond preflight and github:
-`playbook-zotero` must come after `playbook-utils` (its setup script needs
+`playbook-research` must come after `playbook-utils` (its setup script needs
 wget), `playbook-flatpaks` is commented out because flatpaks installed via
 Ansible do not get desktop icons, and `playbook-gaming` is off by default.
 
@@ -210,8 +211,9 @@ false` from inside `ubuntu/` (so `group_vars/` is picked up) that debugs the
 values, and test it both with and without a `vault.yml` present. Delete the
 scratch file afterwards.
 
-The real test is the Vagrant VM, which is wired to `ubuntu/` only. See the
-README for host setup (libvirt, vagrant-libvirt).
+The real test is a Vagrant VM: machine `default` is Ubuntu for `ubuntu/`,
+machine `fedora` is Fedora for `fedora/`. See the README for host setup
+(libvirt, vagrant-libvirt).
 
 ```bash
 cd vagrant
@@ -219,10 +221,17 @@ vagrant up
 ./debug.sh playbooks/playbook-media.yml   # one playbook, path relative to ubuntu/
 ./debug.sh                                # full run, like ubuntu/run.sh
 vagrant destroy && vagrant up             # fresh machine
+vagrant up fedora                         # the Fedora VM (autostart is off)
+DISTRO=fedora ./debug.sh                  # paths then relative to fedora/
 ```
 
+The Fedora box is the Cloud edition, so `bootstrap.sh` installs the pieces
+Workstation already ships (flatpak, `fedora-workstation-repositories`). Do not
+move those into the playbooks: on a real Workstation they are already there.
+
 `debug.sh` regenerates `vagrant/inventory.ini` and `.vagrant-ssh-config` from
-`vagrant ssh-config` (both gitignored), runs from inside `ubuntu/` so
+`vagrant ssh-config` (both gitignored; `-fedora` suffixed for the Fedora VM),
+runs from inside `ubuntu/` (or `fedora/`) so
 `ansible.cfg` and `group_vars/` apply, and passes `-e target_user=vagrant` and
 `-e target_user_home=/home/vagrant`. Those overrides exist because
 `config.yml` resolves `target_user` from the controller's environment (your

@@ -320,9 +320,9 @@ playbooks depend on the variables and the ssh key they set up.
 
 The playbooks normally configure the machine they run on, which makes them
 awkward to iterate on: a broken task can leave your workstation half-configured.
-[`vagrant/`](vagrant/) builds a disposable Ubuntu VM to run them against
-instead — currently wired to the `ubuntu/` playbooks, since that is the
-environment it mirrors.
+[`vagrant/`](vagrant/) builds disposable VMs to run them against instead: an
+Ubuntu one (the machine named `default`) for `ubuntu/`, and a Fedora one (the
+machine named `fedora`) for `fedora/`.
 
 One-time host setup, for the libvirt provider:
 
@@ -343,6 +343,24 @@ vagrant up                                 # boot the VM and bootstrap it
 ./debug.sh                                  # the full run, like ubuntu/run.sh
 vagrant destroy && vagrant up               # throw the machine away and start over
 ```
+
+The Fedora VM is the same loop with the machine name on the `vagrant`
+commands and `DISTRO=fedora` on `debug.sh`. Playbook paths are then relative
+to `fedora/`:
+
+```bash
+vagrant up fedora
+DISTRO=fedora ./debug.sh playbooks/playbook-media.yml
+DISTRO=fedora ./debug.sh
+vagrant destroy fedora && vagrant up fedora
+```
+
+The Fedora box is Fedora's own Cloud Base Vagrant image, pinned by release
+and checksum in the `Vagrantfile`. It is the Cloud edition, not Workstation,
+so the bootstrap adds what Workstation already ships and the playbooks
+assume: `flatpak`, and the third-party repository definitions that hold
+Google Chrome (left disabled, as on Workstation). It has no desktop, so the
+VM shows whether the packages install, not how the apps look.
 
 `debug.sh` builds a throwaway inventory from `vagrant ssh-config`, so the
 VM's address and key always match the running machine, and runs the Ansible
@@ -372,7 +390,7 @@ The VM itself is configured through environment variables on `vagrant up`:
 
 | Variable | Default | Controls |
 |---|---|---|
-| `BOX` | `bento/ubuntu-24.04` | The base box; override to test another release |
+| `BOX` | `bento/ubuntu-24.04` | The Ubuntu base box; override to test another release |
 | `TARGET_USER` | `vagrant` | The account the playbooks configure |
 | `VM_CPUS` | `4` | VM CPUs |
 | `VM_MEMORY` | `8192` | VM memory in MB |

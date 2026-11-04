@@ -54,5 +54,15 @@
         name: distrobox
         state: present
 
+    - name: Install tmux
+      dnf:
+        name: tmux
+        state: present
+
+    - name: Install Okular
+      dnf:
+        name: okular
+        state: present
+
     
 

@@ -1,21 +1,34 @@
-# Vagrant VM for debugging the playbooks in ubuntu/ without touching this
-# machine.
+# Vagrant VMs for debugging the playbooks without touching this machine.
+# Two machines: "default" (Ubuntu, for ubuntu/) and "fedora" (for fedora/).
 #
-#   vagrant up                                  # build the VM (libvirt or virtualbox)
-#   ./debug.sh playbooks/playbook-media.yml     # run one playbook against it
-#   ./debug.sh                                  # the full run, like ubuntu/run.sh
-#   vagrant destroy && vagrant up               # start from a fresh machine
+#   vagrant up                                  # build the Ubuntu VM (libvirt or virtualbox)
+#   vagrant up fedora                           # build the Fedora VM
+#   ./debug.sh playbooks/playbook-media.yml     # run one playbook against Ubuntu
+#   DISTRO=fedora ./debug.sh                    # the full run against Fedora
+#   vagrant destroy fedora && vagrant up fedora # start from a fresh machine
 #
-# The VM has a non-root user with passwordless sudo (bootstrap.sh), so the
+# The VMs have a non-root user with passwordless sudo (bootstrap.sh), so the
 # become plays need no -K. debug.sh points the Ansible pinned by this
-# repository at the VM and overrides target_user, the one setting that
+# repository at a VM and overrides target_user, the one setting that
 # otherwise resolves from this machine's environment.
-Vagrant.configure("2") do |config|
-  # bento keeps boxes current for both libvirt and virtualbox. Override to
-  # debug against another release, e.g. BOX=bento/ubuntu-25.10.
-  config.vm.box = ENV.fetch("BOX", "bento/ubuntu-24.04")
-  config.vm.hostname = "playbook-dev"
 
+# Fedora's own Vagrant boxes, from the release's Cloud images. Bento's Fedora
+# boxes have no x86_64 libvirt build, which is the provider the README sets
+# up. Pinned with checksums from Fedora-Cloud-45-1.4-x86_64-CHECKSUM; bump
+# the release, file names and checksums together.
+FEDORA_IMAGES = "https://dl.fedoraproject.org/pub/fedora/linux/releases/45/Cloud/x86_64/images"
+FEDORA_BOXES = {
+  libvirt: {
+    url: "#{FEDORA_IMAGES}/Fedora-Cloud-Base-Vagrant-libvirt-45-1.4.x86_64.vagrant.libvirt.box",
+    sha256: "9eb98dd1f3459a76415893a710168ad71eb03cbd08fbc3482f24fefa8f97be31",
+  },
+  virtualbox: {
+    url: "#{FEDORA_IMAGES}/Fedora-Cloud-Base-Vagrant-VirtualBox-45-1.4.x86_64.vagrant.virtualbox.box",
+    sha256: "19635c83a2b4f78b9cc04ac57aee9677f96ea5cb4f88938b9374b82d92c0bfa8",
+  },
+}
+
+Vagrant.configure("2") do |config|
   # The account the playbooks configure: group_vars/all/config.yml's
   # target_user. bootstrap.sh creates it with passwordless sudo when it is
   # not the VM's own login user. debug.sh passes the same value to Ansible.
@@ -33,5 +46,30 @@ Vagrant.configure("2") do |config|
   config.vm.provider :virtualbox do |vb|
     vb.cpus = Integer(ENV.fetch("VM_CPUS", "4"))
     vb.memory = ENV.fetch("VM_MEMORY", "8192")
+  end
+
+  # Named "default" so a VM created before the Fedora machine existed is
+  # still this one, and plain `vagrant up` keeps meaning Ubuntu.
+  config.vm.define "default", primary: true do |ubuntu|
+    # bento keeps boxes current for both libvirt and virtualbox. Override to
+    # debug against another release, e.g. BOX=bento/ubuntu-25.10.
+    ubuntu.vm.box = ENV.fetch("BOX", "bento/ubuntu-24.04")
+    ubuntu.vm.hostname = "playbook-dev"
+  end
+
+  config.vm.define "fedora", autostart: false do |fedora|
+    fedora.vm.box = "fedora-cloud-45"
+    fedora.vm.hostname = "playbook-dev-fedora"
+    # The playbooks never read /vagrant, and the libvirt default (NFS) would
+    # ask for the host's sudo password on every `vagrant up`.
+    fedora.vm.synced_folder ".", "/vagrant", disabled: true
+
+    FEDORA_BOXES.each do |provider, box|
+      fedora.vm.provider provider do |_, override|
+        override.vm.box_url = box[:url]
+        override.vm.box_download_checksum = box[:sha256]
+        override.vm.box_download_checksum_type = "sha256"
+      end
+    end
   end
 end
